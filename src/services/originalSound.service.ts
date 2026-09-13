@@ -1,0 +1,205 @@
+import mongoose from 'mongoose';
+import { HttpError } from '../lib/httpError.js';
+import { OriginalSoundModel } from '../models/originalSound.model.js';
+import { PostModel } from '../models/post.model.js';
+import { UserModel } from '../models/user.model.js';
+
+export type OriginalSoundDto = {
+  id: string;
+  sourcePostId: string;
+  ownerUserId: string;
+  ownerUsername: string;
+  ownerFullName: string | null;
+  ownerAvatarUrl: string | null;
+  title: string;
+  audioUrl: string | null;
+  durationSeconds: number | null;
+  usesCount: number;
+  status: 'processing' | 'ready' | 'failed' | 'deleted';
+  createdAt: string;
+};
+
+type SoundLean = {
+  _id: mongoose.Types.ObjectId;
+  sourcePost: mongoose.Types.ObjectId;
+  ownerUser: mongoose.Types.ObjectId;
+  title: string;
+  audioUrl: string | null;
+  durationSeconds: number | null;
+  usesCount: number;
+  status: 'processing' | 'ready' | 'failed' | 'deleted';
+  createdAt: Date;
+};
+
+type OwnerLite = {
+  username: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+};
+
+async function ownersByIds(
+  ids: mongoose.Types.ObjectId[],
+): Promise<Map<string, OwnerLite>> {
+  if (ids.length === 0) return new Map();
+  const rows = await UserModel.find({ _id: { $in: ids } })
+    .select('username fullName avatarUrl')
+    .lean<
+      { _id: mongoose.Types.ObjectId; username: string; fullName?: string | null; avatarUrl?: string | null }[]
+    >();
+  const out = new Map<string, OwnerLite>();
+  for (const r of rows) {
+    out.set(r._id.toString(), {
+      username: r.username,
+      fullName: r.fullName ?? null,
+      avatarUrl: r.avatarUrl ?? null,
+    });
+  }
+  return out;
+}
+
+function toDto(s: SoundLean, ownerMap: Map<string, OwnerLite>): OriginalSoundDto {
+  const owner = ownerMap.get(s.ownerUser.toString());
+  return {
+    id: s._id.toString(),
+    sourcePostId: s.sourcePost.toString(),
+    ownerUserId: s.ownerUser.toString(),
+    ownerUsername: owner?.username ?? 'unknown',
+    ownerFullName: owner?.fullName ?? null,
+    ownerAvatarUrl: owner?.avatarUrl ?? null,
+    title: s.title,
+    audioUrl: s.audioUrl,
+    durationSeconds: s.durationSeconds,
+    usesCount: s.usesCount,
+    status: s.status,
+    createdAt: s.createdAt.toISOString(),
+  };
+}
+
+export type ListOriginalSoundsResult = {
+  items: OriginalSoundDto[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+};
+
+/**
+ * Public catalog: ready+public sounds, hottest first. The `ready` filter
+ * keeps still-processing extractions out of the picker so users don't tap
+ * a sound whose audioUrl is still null.
+ */
+export async function listPublishedOriginalSounds(
+  page: number,
+  limit: number,
+): Promise<ListOriginalSoundsResult> {
+  const filter = { status: 'ready' as const, isPublic: true };
+  const [rows, total] = await Promise.all([
+    OriginalSoundModel.find(filter)
+      .sort({ usesCount: -1, createdAt: -1 })
+      .skip(page * limit)
+      .limit(limit)
+      .lean<SoundLean[]>(),
+    OriginalSoundModel.countDocuments(filter),
+  ]);
+  const ownerMap = await ownersByIds(rows.map(r => r.ownerUser));
+  return {
+    items: rows.map(r => toDto(r, ownerMap)),
+    page,
+    limit,
+    total,
+    hasMore: (page + 1) * limit < total,
+  };
+}
+
+export async function getOriginalSoundById(
+  soundId: string,
+): Promise<OriginalSoundDto> {
+  if (!mongoose.isValidObjectId(soundId)) {
+    throw new HttpError(400, 'Invalid sound id', 'INVALID_SOUND_ID');
+  }
+  const row = await OriginalSoundModel.findById(soundId).lean<SoundLean | null>();
+  if (!row || row.status === 'deleted') {
+    throw new HttpError(404, 'Sound not found', 'SOUND_NOT_FOUND');
+  }
+  const ownerMap = await ownersByIds([row.ownerUser]);
+  return toDto(row, ownerMap);
+}
+
+export type SoundPostListItem = {
+  id: string;
+  authorId: string;
+  authorUsername: string;
+  thumbnailUrl: string | null;
+  mediaUrl: string | null;
+  likesCount: number;
+  createdAt: string;
+};
+
+export type ListPostsUsingSoundResult = {
+  items: SoundPostListItem[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  soundId: string;
+};
+
+/**
+ * Posts that have reused a given Original Sound. Used by the "Videos using
+ * this sound" grid on the now-playing screen.
+ */
+export async function listPostsUsingOriginalSound(
+  soundId: string,
+  page: number,
+  limit: number,
+): Promise<ListPostsUsingSoundResult> {
+  if (!mongoose.isValidObjectId(soundId)) {
+    throw new HttpError(400, 'Invalid sound id', 'INVALID_SOUND_ID');
+  }
+  const soundOid = new mongoose.Types.ObjectId(soundId);
+  const sound = await OriginalSoundModel.findById(soundOid)
+    .select('_id')
+    .lean<{ _id: mongoose.Types.ObjectId } | null>();
+  if (!sound) {
+    throw new HttpError(404, 'Sound not found', 'SOUND_NOT_FOUND');
+  }
+
+  const filter = { originalSoundId: soundOid };
+  const [rows, total] = await Promise.all([
+    PostModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(page * limit)
+      .limit(limit)
+      .select('author thumbnailUrl media likesCount createdAt')
+      .lean<
+        {
+          _id: mongoose.Types.ObjectId;
+          author: mongoose.Types.ObjectId;
+          thumbnailUrl: string | null;
+          media: { url: string | null };
+          likesCount: number;
+          createdAt: Date;
+        }[]
+      >(),
+    PostModel.countDocuments(filter),
+  ]);
+
+  const authorMap = await ownersByIds(rows.map(r => r.author));
+
+  return {
+    items: rows.map(r => ({
+      id: r._id.toString(),
+      authorId: r.author.toString(),
+      authorUsername: authorMap.get(r.author.toString())?.username ?? 'unknown',
+      thumbnailUrl: r.thumbnailUrl ?? null,
+      mediaUrl: r.media?.url ?? null,
+      likesCount: r.likesCount,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    page,
+    limit,
+    total,
+    hasMore: (page + 1) * limit < total,
+    soundId,
+  };
+}

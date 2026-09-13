@@ -1,0 +1,294 @@
+{
+  "$schema": "Manifest for `npm run seed:open-music`. Re-runs are idempotent via seedKey prefix `open-music:v1:`.",
+  "source": "Mixkit free-stock-music (Mixkit License — free for commercial use, no attribution required).",
+  "licenseSummary": "https://mixkit.co/license/",
+  "artists": [
+    {
+      "key": "alejandro-magana",
+      "name": "Alejandro Magaña",
+      "bio": "Composer of cinematic, ambient, and nature-inspired instrumentals.",
+      "profileImageUrl": "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=360&q=80"
+    },
+    {
+      "key": "arulo",
+      "name": "Arulo",
+      "bio": "Lounge, downtempo, and chill electronic producer.",
+      "profileImageUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=360&q=80"
+    },
+    {
+      "key": "eugenio-mininni",
+      "name": "Eugenio Mininni",
+      "bio": "Atmospheric and emotive instrumental compositions.",
+      "profileImageUrl": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=360&q=80"
+    },
+    {
+      "key": "michael-ramir-c",
+      "name": "Michael Ramir C.",
+      "bio": "Funk, pop, and groove-driven productions.",
+      "profileImageUrl": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=360&q=80"
+    }
+  ],
+  "albums": [
+    {
+      "key": "nature-vibes",
+      "title": "Nature Vibes",
+      "artistKey": "alejandro-magana",
+      "coverArtSourceUrl": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=80",
+      "featured": true
+    },
+    {
+      "key": "lounge-vibes",
+      "title": "Lounge Vibes",
+      "artistKey": "arulo",
+      "coverArtSourceUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=80",
+      "featured": false
+    },
+    {
+      "key": "atmospheric",
+      "title": "Atmospheric",
+      "artistKey": "eugenio-mininni",
+      "coverArtSourceUrl": "https://images.unsplash.com/photo-1557672172-298e090bd0f1?auto=format&fit=crop&w=600&q=80",
+      "featured": false
+    },
+    {
+      "key": "funk-pop",
+      "title": "Funk & Pop",
+      "artistKey": "michael-ramir-c",
+      "coverArtSourceUrl": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=600&q=80",
+      "featured": true
+    }
+  ],
+  "tracks": [
+    {
+      "key": "valley-sunset",
+      "title": "Valley Sunset",
+      "albumKey": "nature-vibes",
+      "artistKey": "alejandro-magana",
+      "audioSourceUrl": "https://assets.mixkit.co/music/127/127.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Alejandro Magaña via Mixkit",
+      "sortOrder": 0
+    },
+    {
+      "key": "hazy-after-hours",
+      "title": "Hazy After Hours",
+      "albumKey": "nature-vibes",
+      "artistKey": "alejandro-magana",
+      "audioSourceUrl": "https://assets.mixkit.co/music/132/132.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Alejandro Magaña via Mixkit",
+      "sortOrder": 1
+    },
+    {
+      "key": "tech-house-vibes",
+      "title": "Tech House Vibes",
+      "albumKey": "nature-vibes",
+      "artistKey": "alejandro-magana",
+      "audioSourceUrl": "https://assets.mixkit.co/music/130/130.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Alejandro Magaña via Mixkit",
+      "sortOrder": 2
+    },
+    {
+      "key": "spirit-in-the-woods",
+      "title": "Spirit in the Woods",
+      "albumKey": "nature-vibes",
+      "artistKey": "alejandro-magana",
+      "audioSourceUrl": "https://assets.mixkit.co/music/139/139.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Alejandro Magaña via Mixkit",
+      "sortOrder": 3
+    },
+    {
+      "key": "forest-treasure",
+      "title": "Forest Treasure",
+      "albumKey": "nature-vibes",
+      "artistKey": "alejandro-magana",
+      "audioSourceUrl": "https://assets.mixkit.co/music/138/138.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Alejandro Magaña via Mixkit",
+      "sortOrder": 4
+    },
+
+    {
+      "key": "serene-view",
+      "title": "Serene View",
+      "albumKey": "lounge-vibes",
+      "artistKey": "arulo",
+      "audioSourceUrl": "https://assets.mixkit.co/music/443/443.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Arulo via Mixkit",
+      "sortOrder": 0
+    },
+    {
+      "key": "cat-walk",
+      "title": "Cat Walk",
+      "albumKey": "lounge-vibes",
+      "artistKey": "arulo",
+      "audioSourceUrl": "https://assets.mixkit.co/music/371/371.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Arulo via Mixkit",
+      "sortOrder": 1
+    },
+    {
+      "key": "villa-penthouse",
+      "title": "Villa Penthouse",
+      "albumKey": "lounge-vibes",
+      "artistKey": "arulo",
+      "audioSourceUrl": "https://assets.mixkit.co/music/339/339.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Arulo via Mixkit",
+      "sortOrder": 2
+    },
+    {
+      "key": "island-beat",
+      "title": "Island Beat",
+      "albumKey": "lounge-vibes",
+      "artistKey": "arulo",
+      "audioSourceUrl": "https://assets.mixkit.co/music/250/250.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Arulo via Mixkit",
+      "sortOrder": 3
+    },
+    {
+      "key": "complicated",
+      "title": "Complicated",
+      "albumKey": "lounge-vibes",
+      "artistKey": "arulo",
+      "audioSourceUrl": "https://assets.mixkit.co/music/281/281.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Arulo via Mixkit",
+      "sortOrder": 4
+    },
+
+    {
+      "key": "sun-and-his-daughter",
+      "title": "Sun and His Daughter",
+      "albumKey": "atmospheric",
+      "artistKey": "eugenio-mininni",
+      "audioSourceUrl": "https://assets.mixkit.co/music/580/580.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Eugenio Mininni via Mixkit",
+      "sortOrder": 0
+    },
+    {
+      "key": "deep-urban",
+      "title": "Deep Urban",
+      "albumKey": "atmospheric",
+      "artistKey": "eugenio-mininni",
+      "audioSourceUrl": "https://assets.mixkit.co/music/623/623.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Eugenio Mininni via Mixkit",
+      "sortOrder": 1
+    },
+    {
+      "key": "silent-descent",
+      "title": "Silent Descent",
+      "albumKey": "atmospheric",
+      "artistKey": "eugenio-mininni",
+      "audioSourceUrl": "https://assets.mixkit.co/music/614/614.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1421789665209-c9b2a435e3dc?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Eugenio Mininni via Mixkit",
+      "sortOrder": 2
+    },
+    {
+      "key": "discover",
+      "title": "Discover",
+      "albumKey": "atmospheric",
+      "artistKey": "eugenio-mininni",
+      "audioSourceUrl": "https://assets.mixkit.co/music/587/587.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1502139214982-d0ad755818d8?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Eugenio Mininni via Mixkit",
+      "sortOrder": 3
+    },
+
+    {
+      "key": "cant-get-you-off-my-mind",
+      "title": "Can't Get You Off My Mind",
+      "albumKey": "funk-pop",
+      "artistKey": "michael-ramir-c",
+      "audioSourceUrl": "https://assets.mixkit.co/music/1210/1210.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Michael Ramir C. via Mixkit",
+      "sortOrder": 0
+    },
+    {
+      "key": "gimme-that-groove",
+      "title": "Gimme that Groove!",
+      "albumKey": "funk-pop",
+      "artistKey": "michael-ramir-c",
+      "audioSourceUrl": "https://assets.mixkit.co/music/872/872.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Michael Ramir C. via Mixkit",
+      "sortOrder": 1
+    },
+    {
+      "key": "night-sky-hip-hop",
+      "title": "Night Sky Hip Hop",
+      "albumKey": "funk-pop",
+      "artistKey": "michael-ramir-c",
+      "audioSourceUrl": "https://assets.mixkit.co/music/970/970.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Michael Ramir C. via Mixkit",
+      "sortOrder": 2
+    },
+    {
+      "key": "dirty-thinkin",
+      "title": "Dirty Thinkin'",
+      "albumKey": "funk-pop",
+      "artistKey": "michael-ramir-c",
+      "audioSourceUrl": "https://assets.mixkit.co/music/989/989.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1502139214982-d0ad755818d8?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Michael Ramir C. via Mixkit",
+      "sortOrder": 3
+    },
+    {
+      "key": "fright-night",
+      "title": "Fright Night",
+      "albumKey": "funk-pop",
+      "artistKey": "michael-ramir-c",
+      "audioSourceUrl": "https://assets.mixkit.co/music/871/871.mp3",
+      "artSourceUrl": "https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=400&q=80",
+      "license": "Mixkit License",
+      "licenseUrl": "https://mixkit.co/license/",
+      "attribution": "Michael Ramir C. via Mixkit",
+      "sortOrder": 4
+    }
+  ]
+}
