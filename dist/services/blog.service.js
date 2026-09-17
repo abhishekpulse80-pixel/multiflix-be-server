@@ -7,6 +7,7 @@ import { listFolloweeIds } from './follow.service.js';
 import { createNotification, sendToUser } from './notification.service.js';
 import { generateVideoThumbnail } from './thumbnail.service.js';
 import { isBlockedBetween, listHiddenUserIds } from './userBlock.service.js';
+import { enqueueMediaProcessing } from '../queues/mediaProcessing.queue.js';
 function assertBlogObjectId(id) {
     if (!mongoose.isValidObjectId(id)) {
         throw new HttpError(400, 'Invalid blog id', 'INVALID_BLOG_ID');
@@ -47,6 +48,10 @@ function toListItemDto(doc, followSet, favoriteSet) {
         thumbnailUrl: doc.thumbnailUrl,
         videoUrl: playbackVideoUrl(doc.videoUrl),
         durationSeconds: doc.durationSeconds,
+        mediaProcessingStatus: doc.mediaProcessingStatus ?? 'not_required',
+        hlsUrl: doc.hlsUrl ?? null,
+        hlsVariants: doc.hlsVariants ?? [],
+        mediaProcessingError: doc.mediaProcessingError ?? null,
         tags: [...doc.tags],
         publishedAt: doc.publishedAt
             ? doc.publishedAt.toISOString()
@@ -280,10 +285,24 @@ export async function createBlog(userId, body) {
         title: body.title.trim(),
         description: body.description?.trim() ?? null,
         videoUrl,
+        videoKey: body.file.key,
+        mediaProcessingStatus: 'processing',
+        hlsUrl: null,
+        hlsVariants: [],
+        mediaProcessingError: null,
         thumbnailUrl,
         durationSeconds: body.durationSeconds ?? null,
         status: 'published',
         publishedAt: now,
+    });
+    enqueueMediaProcessing('blog', doc._id.toString()).catch((err) => {
+        void BlogModel.updateOne({ _id: doc._id }, {
+            $set: {
+                mediaProcessingStatus: 'failed',
+                mediaProcessingError: 'Media processing queue unavailable',
+            },
+        });
+        console.error(`[blogs] enqueueMediaProcessing failed blogId=${doc._id.toString()}:`, err instanceof Error ? err.message : err);
     });
     return { id: doc._id.toString() };
 }

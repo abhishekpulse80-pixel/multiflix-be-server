@@ -90,6 +90,11 @@ async function main() {
             author: new mongoose.Types.ObjectId(userId),
             thumbnailUrl: `https://picsum.photos/seed/multiflix-blog-${slug}/1280/720`,
             videoUrl,
+            videoKey: videoUrl,
+            mediaProcessingStatus: 'not_required',
+            hlsUrl: null,
+            hlsVariants: [],
+            mediaProcessingError: null,
             viewsCount: 0,
         });
     });

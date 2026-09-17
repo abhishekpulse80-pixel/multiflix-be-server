@@ -8,6 +8,8 @@ import { listFolloweeIds } from './follow.service.js';
 import { createNotification, sendToUser } from './notification.service.js';
 import { generateVideoThumbnail } from './thumbnail.service.js';
 import { isBlockedBetween, listHiddenUserIds } from './userBlock.service.js';
+import { enqueueMediaProcessing } from '../queues/mediaProcessing.queue.js';
+import type { MediaProcessingVariant, MediaProcessingStatus } from '../types/mediaProcessing.js';
 
 export type BlogAuthorDto = {
   id: string;
@@ -25,6 +27,10 @@ export type BlogListItemDto = {
   /** URL safe for players (seed marker query stripped). */
   videoUrl: string;
   durationSeconds: number | null;
+  mediaProcessingStatus: MediaProcessingStatus;
+  hlsUrl: string | null;
+  hlsVariants: MediaProcessingVariant[];
+  mediaProcessingError: string | null;
   tags: string[];
   publishedAt: string | null;
   author: BlogAuthorDto;
@@ -51,6 +57,10 @@ type BlogPopulatedLean = {
   thumbnailUrl: string;
   videoUrl: string;
   durationSeconds: number | null;
+  mediaProcessingStatus: MediaProcessingStatus;
+  hlsUrl: string | null;
+  hlsVariants: MediaProcessingVariant[];
+  mediaProcessingError: string | null;
   tags: string[];
   publishedAt: Date | null;
   author: AuthorLean;
@@ -106,6 +116,10 @@ function toListItemDto(
     thumbnailUrl: doc.thumbnailUrl,
     videoUrl: playbackVideoUrl(doc.videoUrl),
     durationSeconds: doc.durationSeconds,
+    mediaProcessingStatus: doc.mediaProcessingStatus ?? 'not_required',
+    hlsUrl: doc.hlsUrl ?? null,
+    hlsVariants: doc.hlsVariants ?? [],
+    mediaProcessingError: doc.mediaProcessingError ?? null,
     tags: [...doc.tags],
     publishedAt: doc.publishedAt
       ? doc.publishedAt.toISOString()
@@ -403,10 +417,31 @@ export async function createBlog(
     title: body.title.trim(),
     description: body.description?.trim() ?? null,
     videoUrl,
+    videoKey: body.file.key,
+    mediaProcessingStatus: 'processing',
+    hlsUrl: null,
+    hlsVariants: [],
+    mediaProcessingError: null,
     thumbnailUrl,
     durationSeconds: body.durationSeconds ?? null,
     status: 'published',
     publishedAt: now,
+  });
+
+  enqueueMediaProcessing('blog', doc._id.toString()).catch((err: unknown) => {
+    void BlogModel.updateOne(
+      { _id: doc._id },
+      {
+        $set: {
+          mediaProcessingStatus: 'failed',
+          mediaProcessingError: 'Media processing queue unavailable',
+        },
+      },
+    );
+    console.error(
+      `[blogs] enqueueMediaProcessing failed blogId=${doc._id.toString()}:`,
+      err instanceof Error ? err.message : err,
+    );
   });
 
   return { id: doc._id.toString() };

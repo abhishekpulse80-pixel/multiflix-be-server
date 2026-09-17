@@ -8,6 +8,7 @@ import type {
   MusicListQuery,
   MusicSearchQuery,
 } from '../schemas/music.schemas.js';
+import type { AudioProcessingStatus, AudioVariant } from '../types/audioProcessing.js';
 
 function isDuplicateKeyError(err: unknown): boolean {
   return (
@@ -42,6 +43,9 @@ export type MusicTrackPublicDto = {
   /** Full artist block — Subtask 2. Tap-target for ArtistProfile screen. */
   artist: MusicArtistInfoDto | null;
   durationSeconds: number | null;
+  audioProcessingStatus: AudioProcessingStatus;
+  audioVariants: AudioVariant[];
+  audioProcessingError: string | null;
   favouritedByViewer: boolean;
 };
 
@@ -158,6 +162,9 @@ function trackToDto(
     audioUrl: string;
     streamsCount: number;
     durationSeconds: number | null;
+    audioProcessingStatus?: AudioProcessingStatus;
+    audioVariants?: AudioVariant[];
+    audioProcessingError?: string | null;
   },
   artist: ArtistLean | null,
   favouritedByViewer: boolean,
@@ -172,6 +179,9 @@ function trackToDto(
     artistName: artist?.name ?? '',
     artist: artistInfoFromLean(artist),
     durationSeconds: doc.durationSeconds,
+    audioProcessingStatus: doc.audioProcessingStatus ?? 'not_required',
+    audioVariants: doc.audioVariants ?? [],
+    audioProcessingError: doc.audioProcessingError ?? null,
     favouritedByViewer,
   };
 }

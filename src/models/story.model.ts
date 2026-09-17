@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Model } from 'mongoose';
+import type { MediaProcessingStatus, MediaProcessingVariant } from '../types/mediaProcessing.js';
 
 /** A story is a single image or short-video asset that expires after 24 h. */
 export type StoryMediaKind = 'image' | 'short_video';
@@ -10,6 +11,7 @@ export interface IStoryMedia {
   size: number;
   originalName: string;
   url: string | null;
+  imageVariants?: Array<{ quality: '360w' | '720w' | '1080w'; width: number; url: string }>;
 }
 
 /**
@@ -65,6 +67,10 @@ export interface IStory {
   mediaWidth: number | null;
   mediaHeight: number | null;
   durationSeconds: number | null;
+  mediaProcessingStatus: MediaProcessingStatus;
+  hlsUrl: string | null;
+  hlsVariants: MediaProcessingVariant[];
+  mediaProcessingError: string | null;
   viewsCount: number;
   /** Absolute expiry time — set to `createdAt + 24 h` on create. */
   expiresAt: Date;
@@ -104,6 +110,10 @@ const storyMediaSchema = new Schema<IStoryMedia>(
     size: { type: Number, required: true, min: 0 },
     originalName: { type: String, required: true },
     url: { type: String, default: null },
+    imageVariants: {
+      type: [{ _id: false, quality: { type: String, required: true }, width: { type: Number, required: true }, url: { type: String, required: true } }],
+      default: [],
+    },
   },
   { _id: false },
 );
@@ -134,6 +144,27 @@ const storySchema = new Schema<IStory>(
     mediaWidth: { type: Number, default: null, min: 1 },
     mediaHeight: { type: Number, default: null, min: 1 },
     durationSeconds: { type: Number, default: null, min: 0 },
+    mediaProcessingStatus: {
+      type: String,
+      enum: ['not_required', 'processing', 'ready', 'failed'],
+      default: 'not_required',
+      index: true,
+    },
+    hlsUrl: { type: String, default: null },
+    hlsVariants: {
+      type: [
+        {
+          _id: false,
+          quality: { type: String, required: true },
+          width: { type: Number, required: true },
+          height: { type: Number, required: true },
+          bitrateKbps: { type: Number, required: true },
+          playlistUrl: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    mediaProcessingError: { type: String, default: null },
     viewsCount: { type: Number, default: 0, min: 0 },
     expiresAt: { type: Date, required: true },
     isActive: { type: Boolean, default: true },

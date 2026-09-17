@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Model } from 'mongoose';
+import type { AudioProcessingStatus, AudioVariant } from '../types/audioProcessing.js';
 
 /**
  * Extraction lifecycle. A row is inserted in `processing` immediately when
@@ -32,6 +33,9 @@ export interface IOriginalSound {
   audioKey: string | null;
   /** Final CDN/Public URL — denormalised so feed responses don't recompute. */
   audioUrl: string | null;
+  audioProcessingStatus: AudioProcessingStatus;
+  audioVariants: AudioVariant[];
+  audioProcessingError: string | null;
   durationSeconds: number | null;
 
   /**
@@ -75,6 +79,24 @@ const originalSoundSchema = new Schema<IOriginalSound>(
     },
     audioKey: { type: String, default: null, trim: true, maxlength: 1024 },
     audioUrl: { type: String, default: null, trim: true, maxlength: 2048 },
+    audioProcessingStatus: {
+      type: String,
+      enum: ['not_required', 'processing', 'ready', 'failed'],
+      default: 'not_required',
+      index: true,
+    },
+    audioVariants: {
+      type: [
+        {
+          _id: false,
+          quality: { type: String, required: true },
+          bitrateKbps: { type: Number, required: true },
+          url: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    audioProcessingError: { type: String, default: null },
     durationSeconds: { type: Number, default: null, min: 0 },
     title: { type: String, required: true, trim: true, maxlength: 200 },
     isPublic: { type: Boolean, default: true, index: true },

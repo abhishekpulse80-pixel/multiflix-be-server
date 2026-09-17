@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -38,21 +38,6 @@ function publicUrlForKey(key) {
     const path = key.split('/').map((segment) => encodeURIComponent(segment)).join('/');
     return `${s3Env.publicBaseUrl}/${path}`;
 }
-function clampNetworkSpeed(value) {
-    if (!Number.isFinite(value))
-        return 6;
-    return Math.min(100, Math.max(0.2, value));
-}
-export function recommendedTranscodeQuality(networkSpeedMbps) {
-    const speed = clampNetworkSpeed(networkSpeedMbps);
-    if (speed <= 1.5)
-        return '360p';
-    if (speed <= 5)
-        return '480p';
-    if (speed <= 15)
-        return '720p';
-    return '1080p';
-}
 function variantDimensionsForQuality(quality) {
     switch (quality) {
         case '360p':
@@ -78,7 +63,7 @@ async function ensureFfmpegAvailable() {
         });
     });
 }
-async function downloadFromS3ToFile(key, filePath) {
+export async function downloadFromS3ToFile(key, filePath) {
     const client = getS3Client();
     const result = await client.send(new GetObjectCommand({ Bucket: s3Env.bucket, Key: key }));
     if (!result.Body) {
@@ -90,91 +75,127 @@ async function downloadFromS3ToFile(key, filePath) {
     }
     await writeFile(filePath, Buffer.concat(chunks));
 }
-async function uploadFileToS3(filePath, key) {
-    const buffer = await readFile(filePath);
+export async function uploadBufferToS3(body, key, contentType) {
     const client = getS3Client();
     await client.send(new PutObjectCommand({
         Bucket: s3Env.bucket,
         Key: key,
-        Body: buffer,
-        ContentType: 'video/mp4',
+        Body: body,
+        ContentType: contentType,
         CacheControl: 'public, max-age=31536000, immutable',
         ...(s3Env.objectAcl ? { ACL: s3Env.objectAcl } : {}),
     }));
     return publicUrlForKey(key) ?? key;
 }
-async function transcodeOneVariant(inputPath, outputPath, height, crf) {
+function contentTypeForPath(fileName) {
+    if (fileName.endsWith('.m3u8'))
+        return 'application/vnd.apple.mpegurl';
+    if (fileName.endsWith('.ts'))
+        return 'video/mp2t';
+    return 'application/octet-stream';
+}
+async function createHlsVariant(inputPath, outputDir, quality, height, crf) {
+    await mkdir(outputDir, { recursive: true });
+    const playlistPath = join(outputDir, 'index.m3u8');
     await new Promise((resolve, reject) => {
         execFile('ffmpeg', [
-            '-y',
-            '-i',
-            inputPath,
-            '-vf',
-            `scale=-2:${height}`,
-            '-c:v',
-            'libx264',
-            '-preset',
-            'veryfast',
-            '-crf',
-            String(crf),
-            '-c:a',
-            'aac',
-            '-movflags',
-            '+faststart',
-            '-pix_fmt',
-            'yuv420p',
-            outputPath,
-        ], { timeout: 240_000 }, (err) => {
+            '-y', '-i', inputPath, '-vf', `scale=-2:${String(height)}`,
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf),
+            '-c:a', 'aac', '-b:a', '128k', '-f', 'hls', '-hls_time', '4',
+            '-hls_playlist_type', 'vod', '-hls_segment_filename',
+            join(outputDir, `${quality}-%03d.ts`), playlistPath,
+        ], { timeout: 300_000 }, (err) => {
             if (err) {
-                reject(new HttpError(500, `ffmpeg transcode failed: ${err.message}`, 'TRANSCODE_FAILED'));
+                reject(new HttpError(500, `ffmpeg HLS generation failed: ${err.message}`, 'HLS_TRANSCODE_FAILED'));
                 return;
             }
             resolve();
         });
     });
 }
-export async function transcodeVideoToVariants(params) {
+export async function transcodeVideoToHls(params) {
     const sourceKey = params.sourceKey.trim();
     if (!sourceKey) {
-        throw new HttpError(400, 'sourceKey is required for video transcoding', 'NO_SOURCE_KEY');
+        throw new HttpError(400, 'sourceKey is required for HLS transcoding', 'NO_SOURCE_KEY');
     }
     await ensureFfmpegAvailable();
-    const workDir = join(tmpdir(), `mfx-transcode-${randomUUID()}`);
+    const workDir = join(tmpdir(), `mfx-hls-${randomUUID()}`);
     const inputPath = join(workDir, 'input-source.mp4');
+    const outputRoot = join(workDir, 'hls');
+    try {
+        await mkdir(outputRoot, { recursive: true });
+        await downloadFromS3ToFile(sourceKey, inputPath);
+        const variants = [];
+        for (const preset of TRANSCODE_PRESETS) {
+            const variantDir = join(outputRoot, preset.quality);
+            await createHlsVariant(inputPath, variantDir, preset.quality, preset.height, preset.crf);
+            const outputKeyPrefix = `uploads/${params.userId}/hls/${randomUUID()}/${preset.quality}`;
+            const files = await readdir(variantDir);
+            for (const fileName of files) {
+                await uploadBufferToS3(await readFile(join(variantDir, fileName)), `${outputKeyPrefix}/${fileName}`, contentTypeForPath(fileName));
+            }
+            variants.push({
+                quality: preset.quality,
+                ...variantDimensionsForQuality(preset.quality),
+                bitrateKbps: preset.bitrateKbps,
+                playlistUrl: publicUrlForKey(`${outputKeyPrefix}/index.m3u8`) ?? `${outputKeyPrefix}/index.m3u8`,
+            });
+        }
+        const masterLines = ['#EXTM3U', '#EXT-X-VERSION:3'];
+        for (const variant of variants) {
+            masterLines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${String(variant.bitrateKbps * 1000)},RESOLUTION=${String(variant.width)}x${String(variant.height)}`, variant.playlistUrl);
+        }
+        const masterKey = `uploads/${params.userId}/hls/${randomUUID()}/master.m3u8`;
+        const masterUrl = await uploadBufferToS3(Buffer.from(`${masterLines.join('\n')}\n`), masterKey, 'application/vnd.apple.mpegurl');
+        return { masterUrl, variants };
+    }
+    finally {
+        await rm(workDir, { recursive: true, force: true }).catch(() => { });
+    }
+}
+const AUDIO_PRESETS = [
+    { quality: 'low', bitrateKbps: 64 },
+    { quality: 'medium', bitrateKbps: 128 },
+    { quality: 'high', bitrateKbps: 256 },
+];
+async function createAudioVariant(inputPath, outputPath, bitrateKbps) {
+    await new Promise((resolve, reject) => {
+        execFile('ffmpeg', [
+            '-y', '-i', inputPath, '-vn', '-ac', '2', '-c:a', 'aac',
+            '-b:a', `${String(bitrateKbps)}k`, '-movflags', '+faststart', outputPath,
+        ], { timeout: 240_000 }, (err) => {
+            if (err) {
+                reject(new HttpError(500, `ffmpeg audio transcode failed: ${err.message}`, 'AUDIO_TRANSCODE_FAILED'));
+                return;
+            }
+            resolve();
+        });
+    });
+}
+export async function transcodeAudioToVariants(params) {
+    const sourceKey = params.sourceKey.trim();
+    if (!sourceKey) {
+        throw new HttpError(400, 'sourceKey is required for audio transcoding', 'NO_SOURCE_KEY');
+    }
+    await ensureFfmpegAvailable();
+    const workDir = join(tmpdir(), `mfx-audio-${randomUUID()}`);
+    const inputPath = join(workDir, 'input-audio');
     try {
         await mkdir(workDir, { recursive: true });
         await downloadFromS3ToFile(sourceKey, inputPath);
-        const variantRows = [];
-        const selectedQuality = recommendedTranscodeQuality(typeof params.networkSpeedMbps === 'number' ? params.networkSpeedMbps : 6);
-        for (const preset of TRANSCODE_PRESETS) {
-            const outputName = `${randomUUID()}-${preset.quality}.mp4`;
+        const variants = [];
+        for (const preset of AUDIO_PRESETS) {
+            const outputName = `${preset.quality}.m4a`;
             const outputPath = join(workDir, outputName);
-            await transcodeOneVariant(inputPath, outputPath, preset.height, preset.crf);
-            const outputKey = `uploads/${params.userId}/transcoded/${preset.quality}/${outputName}`;
-            const publicUrl = await uploadFileToS3(outputPath, outputKey);
-            const { width, height } = variantDimensionsForQuality(preset.quality);
-            variantRows.push({
+            await createAudioVariant(inputPath, outputPath, preset.bitrateKbps);
+            const outputKey = `${params.outputKeyPrefix.replace(/\/+$/, '')}/${outputName}`;
+            variants.push({
                 quality: preset.quality,
-                label: preset.quality,
-                url: publicUrl,
-                width,
-                height,
                 bitrateKbps: preset.bitrateKbps,
-                preferred: preset.quality === selectedQuality,
+                url: await uploadBufferToS3(await readFile(outputPath), outputKey, 'audio/mp4'),
             });
         }
-        const recommendedVariant = variantRows.find((item) => item.quality === selectedQuality) ?? variantRows[variantRows.length - 1];
-        if (!recommendedVariant) {
-            throw new HttpError(500, 'No video variants were generated', 'NO_TRANSCODED_VARIANTS');
-        }
-        const manifest = {
-            sourceKey,
-            sourceUrl: publicUrlForKey(sourceKey),
-            recommendedQuality: recommendedVariant.quality,
-            recommendedUrl: recommendedVariant.url,
-            variants: variantRows,
-        };
-        return manifest;
+        return variants;
     }
     finally {
         await rm(workDir, { recursive: true, force: true }).catch(() => { });

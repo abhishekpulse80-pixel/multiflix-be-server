@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
 import { Router } from 'express';
 import { env, isProd } from '../config/env.js';
 import { asyncRoute } from '../lib/asyncRoute.js';
@@ -8,6 +9,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { validateBody } from '../middleware/validateBody.js';
 import { createStoryBodySchema, recordStoryViewBodySchema, storyFeedQuerySchema, storyReactBodySchema, } from '../schemas/stories.schemas.js';
 import * as storyService from '../services/story.service.js';
+import { StoryModel } from '../models/story.model.js';
 const rateLimitShared = !isProd && env.trustProxyHops === 0
     ? { validate: { xForwardedForHeader: false } }
     : {};
@@ -45,6 +47,30 @@ storiesRouter.post('/', strictLimiter, requireAuth, validateBody(createStoryBody
     const body = req.body;
     const story = await storyService.createStory(req.auth.userId, body);
     sendData(res, { story }, 201);
+}));
+/**
+ * HLS processing status for a video story.
+ * `GET /api/v1/stories/:storyId/media-status`
+ */
+storiesRouter.get('/:storyId/media-status', readLimiter, requireAuth, asyncRoute(async (req, res) => {
+    const storyId = storyIdParam(req);
+    if (!mongoose.isValidObjectId(storyId)) {
+        throw new HttpError(400, 'Invalid story id', 'INVALID_STORY_ID');
+    }
+    const story = await StoryModel.findById(storyId)
+        .select('mediaKind mediaProcessingStatus hlsUrl hlsVariants mediaProcessingError')
+        .lean();
+    if (!story) {
+        throw new HttpError(404, 'Story not found', 'STORY_NOT_FOUND');
+    }
+    sendData(res, {
+        mediaId: storyId,
+        mediaKind: story.mediaKind,
+        status: story.mediaProcessingStatus,
+        hlsUrl: story.hlsUrl,
+        variants: story.hlsVariants,
+        error: story.mediaProcessingError,
+    });
 }));
 /**
  * Paginated feed of all active stories (newest first).

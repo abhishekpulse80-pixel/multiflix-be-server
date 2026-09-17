@@ -76,6 +76,9 @@ function trackToDto(doc, artist, favouritedByViewer) {
         artistName: artist?.name ?? '',
         artist: artistInfoFromLean(artist),
         durationSeconds: doc.durationSeconds,
+        audioProcessingStatus: doc.audioProcessingStatus ?? 'not_required',
+        audioVariants: doc.audioVariants ?? [],
+        audioProcessingError: doc.audioProcessingError ?? null,
         favouritedByViewer,
     };
 }

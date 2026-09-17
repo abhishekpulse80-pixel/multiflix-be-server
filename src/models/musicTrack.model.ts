@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Model } from 'mongoose';
+import type { AudioProcessingStatus, AudioVariant } from '../types/audioProcessing.js';
 
 export type MusicTrackStatus = 'draft' | 'published';
 
@@ -13,6 +14,10 @@ export interface IMusicTrack {
   artUrl: string;
   /** Stream URL (MP3, etc.) — filled by admin upload pipeline later. */
   audioUrl: string;
+  audioKey: string | null;
+  audioProcessingStatus: AudioProcessingStatus;
+  audioVariants: AudioVariant[];
+  audioProcessingError: string | null;
   durationSeconds: number | null;
   /** Aggregate play count (no per-listener detail). */
   streamsCount: number;
@@ -41,6 +46,25 @@ const musicTrackSchema = new Schema<IMusicTrack>(
     },
     artUrl: { type: String, required: true, trim: true, maxlength: 2048 },
     audioUrl: { type: String, required: true, trim: true, maxlength: 2048 },
+    audioKey: { type: String, default: null, trim: true, maxlength: 1024 },
+    audioProcessingStatus: {
+      type: String,
+      enum: ['not_required', 'processing', 'ready', 'failed'],
+      default: 'not_required',
+      index: true,
+    },
+    audioVariants: {
+      type: [
+        {
+          _id: false,
+          quality: { type: String, required: true },
+          bitrateKbps: { type: Number, required: true },
+          url: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    audioProcessingError: { type: String, default: null },
     durationSeconds: { type: Number, default: null, min: 0 },
     streamsCount: { type: Number, required: true, min: 0, default: 0 },
     sortOrder: { type: Number, required: true, min: 0, default: 0 },

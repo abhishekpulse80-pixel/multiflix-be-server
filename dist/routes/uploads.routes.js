@@ -8,7 +8,7 @@ import { sendData } from '../lib/sendData.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { UPLOAD_BULK_MAX_FILES, uploadBulkMedia, uploadSingleMedia, } from '../middleware/uploadMulter.js';
 import { presignUpload, uploadOneBuffer } from '../services/upload.service.js';
-import { recommendedTranscodeQuality, transcodeVideoToVariants } from '../services/transcoding.service.js';
+import { createImageVariants } from '../services/imageProcessing.service.js';
 const rateLimitShared = !isProd && env.trustProxyHops === 0
     ? {
         validate: { xForwardedForHeader: false },
@@ -38,34 +38,34 @@ function clampNetworkSpeed(value) {
     return Math.min(100, Math.max(0.2, value));
 }
 function networkProfileFromSpeed(speedMbps) {
-    if (speedMbps <= 1.5)
-        return 'slow';
-    if (speedMbps <= 5)
+    if (speedMbps < 0.5)
+        return 'low';
+    if (speedMbps < 1.5)
         return 'balanced';
-    if (speedMbps <= 15)
+    if (speedMbps < 4)
         return 'good';
-    return 'fast';
+    return 'high';
 }
 function recommendedQualityForKind(kind, speedMbps) {
     if (kind === 'audio') {
-        if (speedMbps <= 1.5)
+        if (speedMbps < 0.5)
             return 'low';
-        if (speedMbps <= 5)
+        if (speedMbps < 1.5)
             return 'medium';
         return 'high';
     }
     if (kind === 'image') {
-        if (speedMbps <= 1.5)
+        if (speedMbps < 0.5)
             return '360w';
-        if (speedMbps <= 5)
+        if (speedMbps < 1.5)
             return '720w';
         return '1080w';
     }
-    if (speedMbps <= 1.5)
+    if (speedMbps < 0.5)
         return '360p';
-    if (speedMbps <= 5)
+    if (speedMbps < 1.5)
         return '480p';
-    if (speedMbps <= 15)
+    if (speedMbps < 4)
         return '720p';
     return '1080p';
 }
@@ -110,9 +110,9 @@ function buildAdaptiveMediaPlan(params) {
         recommendedQuality,
         recommendedUrl,
         transcoding: {
-            enabled: true,
+            enabled: false,
             strategy: 'network-aware',
-            note: 'Frontend should use recommendedUrl and fall back to the original media URL when a higher-quality variant is not available yet.',
+            note: 'This endpoint recommends a CDN variant URL; it does not run FFmpeg. Use HLS hlsUrl for backend-transcoded video playback.',
         },
         variants: resolvedVariants,
     };
@@ -163,14 +163,26 @@ uploadsRouter.get('/quality-profile', strictLimiter, requireAuth, asyncRoute(asy
         networkSpeedMbps: Number(speed.toFixed(1)),
         networkProfile: profile,
         recommendedQuality,
-        maxResolution: profile === 'slow' ? '360p' : profile === 'balanced' ? '480p' : profile === 'good' ? '720p' : '1080p',
+        maxResolution: profile === 'low' ? '360p' : profile === 'balanced' ? '480p' : profile === 'good' ? '720p' : '1080p',
         prefetchStrategy: 'cache-first',
-        bufferingHint: profile === 'slow'
+        bufferingHint: profile === 'low'
             ? 'Use lower bitrate and keep first frame preload short.'
             : profile === 'balanced'
                 ? 'Use balanced quality and keep prefetch enabled.'
                 : 'Use high-quality media and let the app prefetch next items.',
     });
+}));
+/** Generate real CDN image variants after a direct S3 upload. */
+uploadsRouter.post('/image-variants', strictLimiter, requireAuth, asyncRoute(async (req, res) => {
+    const sourceKey = typeof req.body?.sourceKey === 'string' ? req.body.sourceKey.trim() : '';
+    if (!sourceKey) {
+        throw new HttpError(400, 'sourceKey is required', 'NO_SOURCE_KEY');
+    }
+    const variants = await createImageVariants({
+        userId: req.auth.userId,
+        sourceKey,
+    });
+    sendData(res, { sourceKey, variants });
 }));
 uploadsRouter.post('/adaptive', strictLimiter, requireAuth, asyncRoute(async (req, res) => {
     const body = (req.body ?? {});
@@ -212,36 +224,6 @@ uploadsRouter.post('/adaptive', strictLimiter, requireAuth, asyncRoute(async (re
         plan,
     });
     sendData(res, plan);
-}));
-uploadsRouter.post('/transcode', strictLimiter, requireAuth, asyncRoute(async (req, res) => {
-    const body = (req.body ?? {});
-    const sourceKey = typeof body.sourceKey === 'string' ? body.sourceKey.trim() : '';
-    if (!sourceKey) {
-        throw new HttpError(400, 'sourceKey is required', 'NO_SOURCE_KEY');
-    }
-    const networkSpeedMbps = typeof body.networkSpeedMbps === 'number'
-        ? body.networkSpeedMbps
-        : typeof body.networkSpeedMbps === 'string'
-            ? Number(body.networkSpeedMbps)
-            : 6;
-    const manifest = await transcodeVideoToVariants({
-        userId: req.auth.userId,
-        sourceKey,
-        networkSpeedMbps,
-    });
-    sendData(res, {
-        ...manifest,
-        recommendedQuality: manifest.recommendedQuality,
-        recommendedUrl: manifest.recommendedUrl,
-        fallbackUrl: manifest.sourceUrl ?? null,
-        networkProfile: recommendedTranscodeQuality(networkSpeedMbps) === '360p'
-            ? 'slow'
-            : recommendedTranscodeQuality(networkSpeedMbps) === '480p'
-                ? 'balanced'
-                : recommendedTranscodeQuality(networkSpeedMbps) === '720p'
-                    ? 'good'
-                    : 'fast',
-    });
 }));
 uploadsRouter.post('/single', strictLimiter, requireAuth, runMulter(uploadSingleMedia.single('file')), asyncRoute(async (req, res) => {
     const f = req.file;

@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
 import { Router, type Request } from 'express';
 import { env, isProd } from '../config/env.js';
 import { asyncRoute } from '../lib/asyncRoute.js';
@@ -12,6 +13,7 @@ import {
   createBlogBodySchema,
 } from '../schemas/blogs.schemas.js';
 import * as blogService from '../services/blog.service.js';
+import { BlogModel } from '../models/blog.model.js';
 
 const rateLimitShared =
   !isProd && env.trustProxyHops === 0
@@ -150,6 +152,36 @@ blogsRouter.post(
     const body = req.body as import('../schemas/blogs.schemas.js').CreateBlogBody;
     const result = await blogService.createBlog(req.auth.userId, body);
     sendData(res, { blog: result }, 201);
+  }),
+);
+
+/**
+ * HLS processing status for a video blog.
+ * `GET /api/v1/blogs/:blogId/media-status`
+ */
+blogsRouter.get(
+  '/:blogId/media-status',
+  readLimiter,
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const blogId = blogIdParam(req);
+    if (!mongoose.isValidObjectId(blogId)) {
+      throw new HttpError(400, 'Invalid blog id', 'INVALID_BLOG_ID');
+    }
+    const blog = await BlogModel.findById(blogId)
+      .select('mediaProcessingStatus hlsUrl hlsVariants mediaProcessingError')
+      .lean();
+    if (!blog) {
+      throw new HttpError(404, 'Blog not found', 'BLOG_NOT_FOUND');
+    }
+    sendData(res, {
+      mediaId: blogId,
+      mediaKind: 'video',
+      status: blog.mediaProcessingStatus,
+      hlsUrl: blog.hlsUrl,
+      variants: blog.hlsVariants,
+      error: blog.mediaProcessingError,
+    });
   }),
 );
 

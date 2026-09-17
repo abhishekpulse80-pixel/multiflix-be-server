@@ -14,6 +14,10 @@ const uploadedFileRefSchema = z
     size: z.number().int().nonnegative(),
     originalName: z.string().min(1).max(200),
     url: z.union([z.string().min(1).max(2048), z.null()]),
+    imageVariants: z
+        .array(z.object({ quality: z.enum(['360w', '720w', '1080w']), width: z.number().int().positive(), url: z.string().url() }).strict())
+        .max(3)
+        .optional(),
 })
     .strict();
 export const createBlogBodySchema = z
