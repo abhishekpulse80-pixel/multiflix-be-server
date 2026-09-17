@@ -12,6 +12,7 @@ import { s3Env, isS3Configured } from '../config/s3Env.js';
 import { OriginalSoundModel } from '../models/originalSound.model.js';
 import { PostModel } from '../models/post.model.js';
 import { UserModel } from '../models/user.model.js';
+import { enqueueMediaProcessing } from '../queues/mediaProcessing.queue.js';
 
 let s3Client: S3Client | null = null;
 function getS3Client(): S3Client {
@@ -100,6 +101,8 @@ export async function extractSoundForPost(
         {
           $set: {
             status: 'processing',
+            audioProcessingStatus: 'processing',
+            audioProcessingError: null,
             failureReason: null,
             title,
           },
@@ -111,6 +114,7 @@ export async function extractSoundForPost(
         ownerUser: post.author,
         title,
         status: 'processing',
+        audioProcessingStatus: 'processing',
         // Visibility piggy-backs on the post until we add per-post privacy.
         isPublic: true,
         usesCount: 0,
@@ -192,6 +196,8 @@ export async function extractSoundForPost(
           $set: {
             audioKey,
             audioUrl,
+            audioProcessingStatus: 'processing',
+            audioProcessingError: null,
             durationSeconds: post.durationSeconds ?? null,
             status: 'ready',
             failureReason: null,
@@ -204,6 +210,22 @@ export async function extractSoundForPost(
       ),
     ]);
 
+    enqueueMediaProcessing('sound', soundDoc._id.toString()).catch((queueError: unknown) => {
+      void OriginalSoundModel.updateOne(
+        { _id: soundDoc._id },
+        {
+          $set: {
+            audioProcessingStatus: 'failed',
+            audioProcessingError: 'Audio processing queue unavailable',
+          },
+        },
+      );
+      console.error(
+        `[sound-extraction] audio queue failed soundId=${soundDoc._id.toString()}:`,
+        queueError instanceof Error ? queueError.message : queueError,
+      );
+    });
+
     return soundDoc._id.toString();
   } catch (err: unknown) {
     const message =
@@ -213,6 +235,8 @@ export async function extractSoundForPost(
       {
         $set: {
           status: 'failed',
+          audioProcessingStatus: 'failed',
+          audioProcessingError: message.slice(0, 512),
           failureReason: message.slice(0, 512),
         },
       },

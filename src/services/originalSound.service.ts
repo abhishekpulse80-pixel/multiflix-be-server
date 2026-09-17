@@ -3,6 +3,7 @@ import { HttpError } from '../lib/httpError.js';
 import { OriginalSoundModel } from '../models/originalSound.model.js';
 import { PostModel } from '../models/post.model.js';
 import { UserModel } from '../models/user.model.js';
+import type { AudioProcessingStatus, AudioVariant } from '../types/audioProcessing.js';
 
 export type OriginalSoundDto = {
   id: string;
@@ -13,6 +14,9 @@ export type OriginalSoundDto = {
   ownerAvatarUrl: string | null;
   title: string;
   audioUrl: string | null;
+  audioProcessingStatus: AudioProcessingStatus;
+  audioVariants: AudioVariant[];
+  audioProcessingError: string | null;
   durationSeconds: number | null;
   usesCount: number;
   status: 'processing' | 'ready' | 'failed' | 'deleted';
@@ -25,6 +29,9 @@ type SoundLean = {
   ownerUser: mongoose.Types.ObjectId;
   title: string;
   audioUrl: string | null;
+  audioProcessingStatus: AudioProcessingStatus;
+  audioVariants: AudioVariant[];
+  audioProcessingError: string | null;
   durationSeconds: number | null;
   usesCount: number;
   status: 'processing' | 'ready' | 'failed' | 'deleted';
@@ -68,6 +75,9 @@ function toDto(s: SoundLean, ownerMap: Map<string, OwnerLite>): OriginalSoundDto
     ownerAvatarUrl: owner?.avatarUrl ?? null,
     title: s.title,
     audioUrl: s.audioUrl,
+    audioProcessingStatus: s.audioProcessingStatus ?? 'not_required',
+    audioVariants: s.audioVariants ?? [],
+    audioProcessingError: s.audioProcessingError ?? null,
     durationSeconds: s.durationSeconds,
     usesCount: s.usesCount,
     status: s.status,

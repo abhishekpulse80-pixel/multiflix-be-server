@@ -21,6 +21,24 @@ const originalSoundSchema = new Schema({
     },
     audioKey: { type: String, default: null, trim: true, maxlength: 1024 },
     audioUrl: { type: String, default: null, trim: true, maxlength: 2048 },
+    audioProcessingStatus: {
+        type: String,
+        enum: ['not_required', 'processing', 'ready', 'failed'],
+        default: 'not_required',
+        index: true,
+    },
+    audioVariants: {
+        type: [
+            {
+                _id: false,
+                quality: { type: String, required: true },
+                bitrateKbps: { type: Number, required: true },
+                url: { type: String, required: true },
+            },
+        ],
+        default: [],
+    },
+    audioProcessingError: { type: String, default: null },
     durationSeconds: { type: Number, default: null, min: 0 },
     title: { type: String, required: true, trim: true, maxlength: 200 },
     isPublic: { type: Boolean, default: true, index: true },

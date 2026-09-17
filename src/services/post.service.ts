@@ -24,6 +24,7 @@ import {
 import { createNotification, sendToUser } from './notification.service.js';
 import { generateVideoThumbnail } from './thumbnail.service.js';
 import { enqueueSoundExtraction } from '../queues/soundExtraction.queue.js';
+import { enqueueMediaProcessing } from '../queues/mediaProcessing.queue.js';
 import { OriginalSoundModel } from '../models/originalSound.model.js';
 import { listHiddenUserIds } from './userBlock.service.js';
 
@@ -36,6 +37,7 @@ export type PostMediaDto = {
   size: number;
   originalName: string;
   url: string | null;
+  imageVariants: Array<{ quality: '360w' | '720w' | '1080w'; width: number; url: string }>;
 };
 
 /**
@@ -94,6 +96,16 @@ export type PostDto = {
   mediaWidth: number | null;
   mediaHeight: number | null;
   durationSeconds: number | null;
+  mediaProcessingStatus: 'not_required' | 'processing' | 'ready' | 'failed';
+  hlsUrl: string | null;
+  hlsVariants: Array<{
+    quality: string;
+    width: number;
+    height: number;
+    bitrateKbps: number;
+    playlistUrl: string;
+  }>;
+  mediaProcessingError: string | null;
   likesCount: number;
   savesCount: number;
   commentsCount: number;
@@ -513,6 +525,7 @@ function toPostDto(
       size: doc.media.size,
       originalName: doc.media.originalName,
       url: doc.media.url,
+      imageVariants: doc.media.imageVariants ?? [],
     },
     thumbnailUrl: doc.thumbnailUrl ?? null,
     caption: doc.caption,
@@ -524,6 +537,10 @@ function toPostDto(
     mediaWidth: doc.mediaWidth,
     mediaHeight: doc.mediaHeight,
     durationSeconds: doc.durationSeconds,
+    mediaProcessingStatus: doc.mediaProcessingStatus ?? 'not_required',
+    hlsUrl: doc.hlsUrl ?? null,
+    hlsVariants: doc.hlsVariants ?? [],
+    mediaProcessingError: doc.mediaProcessingError ?? null,
     likesCount: doc.likesCount,
     savesCount: doc.savesCount ?? 0,
     commentsCount: doc.commentsCount,
@@ -1587,6 +1604,7 @@ export async function createPost(
       size: body.file.size,
       originalName: body.file.originalName,
       url: body.file.url,
+      imageVariants: body.file.imageVariants ?? [],
     },
     caption: body.caption ?? null,
     hashtags: body.hashtags ?? null,
@@ -1602,10 +1620,22 @@ export async function createPost(
     mediaWidth: body.mediaWidth ?? null,
     mediaHeight: body.mediaHeight ?? null,
     durationSeconds: body.durationSeconds ?? null,
+    mediaProcessingStatus: body.mediaKind === 'short_video' ? 'processing' : 'not_required',
   });
 
   // Auto-generate thumbnail for video posts (non-blocking for response)
   if (body.mediaKind === 'short_video') {
+    enqueueMediaProcessing('post', doc._id.toString()).catch((err: unknown) => {
+      void PostModel.updateOne(
+        { _id: doc._id },
+        { $set: { mediaProcessingStatus: 'failed', mediaProcessingError: 'Media processing queue unavailable' } },
+      );
+      // eslint-disable-next-line no-console
+      console.error(
+        `[posts] enqueueMediaProcessing failed postId=${doc._id.toString()}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
     generateVideoThumbnail(body.file.key, userId)
       .then(async (thumbUrl) => {
         if (thumbUrl) {
@@ -1626,7 +1656,7 @@ export async function createPost(
       console.log(
         `[posts] enqueue sound extraction postId=${doc._id.toString()}`,
       );
-      enqueueSoundExtraction(doc._id.toString()).catch(err => {
+      enqueueSoundExtraction(doc._id.toString()).catch((err: unknown) => {
         // eslint-disable-next-line no-console
         console.error(
           `[posts] enqueueSoundExtraction failed postId=${doc._id.toString()}:`,

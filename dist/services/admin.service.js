@@ -1,3 +1,4 @@
+import { s3Env } from '../config/s3Env.js';
 import { extractAudioDurationFromUrl } from '../lib/audioDuration.js';
 import { HttpError } from '../lib/httpError.js';
 import { AdModel } from '../models/ad.model.js';
@@ -22,6 +23,13 @@ import { TransactionModel } from '../models/transaction.model.js';
 import { UserBlockModel } from '../models/userBlock.model.js';
 import { UserModel } from '../models/user.model.js';
 import { EARNING_SECTIONS, EarningRateModel, } from '../models/earningRate.model.js';
+import { enqueueMediaProcessing } from '../queues/mediaProcessing.queue.js';
+function sourceKeyFromPublicUrl(rawUrl) {
+    const prefix = `${s3Env.publicBaseUrl}/`;
+    if (!s3Env.publicBaseUrl || !rawUrl.startsWith(prefix))
+        return null;
+    return decodeURIComponent(rawUrl.slice(prefix.length).split('?')[0] ?? '');
+}
 /* ------------------------------------------------------------------ */
 /*  Stats                                                              */
 /* ------------------------------------------------------------------ */
@@ -477,16 +485,26 @@ export async function createTrack(body) {
     if (durationSeconds == null) {
         durationSeconds = await extractAudioDurationFromUrl(body.audioUrl);
     }
+    const audioKey = sourceKeyFromPublicUrl(body.audioUrl);
     const track = await MusicTrackModel.create({
         album: body.albumId || null,
         title: body.title,
         artist: body.artistId,
         artUrl: body.artUrl,
         audioUrl: body.audioUrl,
+        audioKey,
+        audioProcessingStatus: audioKey ? 'processing' : 'not_required',
+        audioVariants: [],
+        audioProcessingError: null,
         durationSeconds,
         sortOrder: body.sortOrder ?? 0,
         status: body.status ?? 'published',
     });
+    if (audioKey) {
+        enqueueMediaProcessing('music', track._id.toString()).catch(() => {
+            void MusicTrackModel.updateOne({ _id: track._id }, { $set: { audioProcessingStatus: 'failed', audioProcessingError: 'Audio processing queue unavailable' } });
+        });
+    }
     return track.toObject();
 }
 export async function deleteAlbum(albumId) {

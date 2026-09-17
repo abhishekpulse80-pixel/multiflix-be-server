@@ -28,6 +28,11 @@ const BLOG_BLUEPRINTS: Omit<
   | 'videoUrl'
   | 'thumbnailUrl'
   | 'viewsCount'
+  | 'videoKey'
+  | 'mediaProcessingStatus'
+  | 'hlsUrl'
+  | 'hlsVariants'
+  | 'mediaProcessingError'
 >[] = [
   {
     title: 'Building a calm creative routine',
@@ -120,6 +125,11 @@ async function main(): Promise<void> {
       author: new mongoose.Types.ObjectId(userId),
       thumbnailUrl: `https://picsum.photos/seed/multiflix-blog-${slug}/1280/720`,
       videoUrl,
+      videoKey: videoUrl,
+      mediaProcessingStatus: 'not_required',
+      hlsUrl: null,
+      hlsVariants: [],
+      mediaProcessingError: null,
       viewsCount: 0,
     });
   });

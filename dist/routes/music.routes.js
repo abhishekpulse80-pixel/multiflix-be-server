@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
 import { Router } from 'express';
 import { env, isProd } from '../config/env.js';
 import { asyncRoute } from '../lib/asyncRoute.js';
@@ -8,6 +9,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { validateBody } from '../middleware/validateBody.js';
 import { musicListQuerySchema, musicSearchQuerySchema, musicTrackFavouriteBodySchema, } from '../schemas/music.schemas.js';
 import * as musicService from '../services/music.service.js';
+import { MusicTrackModel } from '../models/musicTrack.model.js';
 const rateLimitShared = !isProd && env.trustProxyHops === 0
     ? {
         validate: { xForwardedForHeader: false },
@@ -59,6 +61,13 @@ function artistIdParam(req) {
     }
     return artistId;
 }
+function recommendedAudioQuality(speedMbps) {
+    if (!Number.isFinite(speedMbps) || speedMbps < 0.5)
+        return 'low';
+    if (speedMbps < 1.5)
+        return 'medium';
+    return 'high';
+}
 /**
  * Published albums for the music home carousel.
  * `GET /api/v1/music/albums?page=&limit=`
@@ -88,6 +97,32 @@ musicRouter.get('/tracks/recommended', readLimiter, requireAuth, asyncRoute(asyn
     }
     const data = await musicService.listRecommendedMusicTracks(parsed.data, req.auth.userId);
     sendData(res, data);
+}));
+/**
+ * Adaptive audio status for a music track.
+ * `GET /api/v1/music/tracks/:trackId/audio-status?networkSpeedMbps=4`
+ */
+musicRouter.get('/tracks/:trackId/audio-status', readLimiter, requireAuth, asyncRoute(async (req, res) => {
+    const trackId = trackIdParam(req);
+    if (!mongoose.isValidObjectId(trackId)) {
+        throw new HttpError(400, 'Invalid track id', 'INVALID_TRACK_ID');
+    }
+    const track = await MusicTrackModel.findById(trackId)
+        .select('audioUrl audioProcessingStatus audioVariants audioProcessingError')
+        .lean();
+    if (!track) {
+        throw new HttpError(404, 'Music track not found', 'TRACK_NOT_FOUND');
+    }
+    const quality = recommendedAudioQuality(Number(req.query.networkSpeedMbps ?? 6));
+    const recommended = track.audioVariants?.find((variant) => variant.quality === quality);
+    sendData(res, {
+        trackId,
+        status: track.audioProcessingStatus ?? 'not_required',
+        recommendedQuality: quality,
+        recommendedUrl: recommended?.url ?? track.audioUrl,
+        variants: track.audioVariants ?? [],
+        error: track.audioProcessingError ?? null,
+    });
 }));
 /**
  * Single track by id with the viewer's favourite flag. Defined after

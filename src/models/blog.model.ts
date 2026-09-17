@@ -1,4 +1,5 @@
 import mongoose, { Schema, type Model } from 'mongoose';
+import type { MediaProcessingStatus, MediaProcessingVariant } from '../types/mediaProcessing.js';
 
 /**
  * Long-form video blog (podcast-style). Upload pipeline can fill `videoUrl` / `thumbnailUrl` later.
@@ -16,7 +17,13 @@ export interface IBlog {
   thumbnailUrl: string;
   /** Main episode URL (MP4, HLS, etc.) after upload. */
   videoUrl: string;
+  /** Original S3 object key used by the media worker. */
+  videoKey: string;
   durationSeconds: number | null;
+  mediaProcessingStatus: MediaProcessingStatus;
+  hlsUrl: string | null;
+  hlsVariants: MediaProcessingVariant[];
+  mediaProcessingError: string | null;
   tags: string[];
   status: BlogStatus;
   /** When the blog went live; null for drafts. */
@@ -38,7 +45,29 @@ const blogSchema = new Schema<IBlog>(
     viewsCount: { type: Number, required: true, min: 0, default: 0 },
     thumbnailUrl: { type: String, required: true, trim: true, maxlength: 2048 },
     videoUrl: { type: String, required: true, trim: true, maxlength: 2048 },
+    videoKey: { type: String, required: true, trim: true, maxlength: 1024 },
     durationSeconds: { type: Number, default: null, min: 0 },
+    mediaProcessingStatus: {
+      type: String,
+      enum: ['not_required', 'processing', 'ready', 'failed'],
+      default: 'processing',
+      index: true,
+    },
+    hlsUrl: { type: String, default: null },
+    hlsVariants: {
+      type: [
+        {
+          _id: false,
+          quality: { type: String, required: true },
+          width: { type: Number, required: true },
+          height: { type: Number, required: true },
+          bitrateKbps: { type: Number, required: true },
+          playlistUrl: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    mediaProcessingError: { type: String, default: null },
     tags: { type: [String], default: [] },
     status: {
       type: String,

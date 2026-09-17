@@ -6,6 +6,16 @@ import {
   type SoundExtractionJobData,
 } from './queues/soundExtraction.queue.js';
 import { extractSoundForPost } from './services/soundExtraction.service.js';
+import {
+  MEDIA_PROCESSING_QUEUE,
+  type MediaProcessingJobData,
+} from './queues/mediaProcessing.queue.js';
+import { PostModel } from './models/post.model.js';
+import { BlogModel } from './models/blog.model.js';
+import { StoryModel } from './models/story.model.js';
+import { OriginalSoundModel } from './models/originalSound.model.js';
+import { MusicTrackModel } from './models/musicTrack.model.js';
+import { transcodeAudioToVariants, transcodeVideoToHls } from './services/transcoding.service.js';
 
 /**
  * Background worker entry. Runs in its own pm2 process (`multiflix-worker`)
@@ -36,12 +46,96 @@ async function main(): Promise<void> {
     },
   );
 
+  const mediaWorker = new Worker<MediaProcessingJobData>(
+    MEDIA_PROCESSING_QUEUE,
+    async (job: Job<MediaProcessingJobData>) => {
+      const mediaType = job.data.mediaType ?? (job.data.postId ? 'post' : undefined);
+      const mediaId = job.data.mediaId ?? job.data.postId;
+      if (!mediaType || !mediaId) return;
+
+      if (mediaType === 'sound' || mediaType === 'music') {
+        const audioSource = mediaType === 'sound'
+          ? await OriginalSoundModel.findById(mediaId).select('audioKey')
+          : await MusicTrackModel.findById(mediaId).select('audioKey');
+        if (!audioSource?.audioKey) return;
+        try {
+          const variants = await transcodeAudioToVariants({
+            sourceKey: audioSource.audioKey,
+            outputKeyPrefix: `${mediaType === 'sound' ? 'sounds' : 'music'}/${mediaId}/variants`,
+          });
+          const update = { $set: { audioProcessingStatus: 'ready', audioVariants: variants, audioProcessingError: null } };
+          if (mediaType === 'sound') await OriginalSoundModel.updateOne({ _id: mediaId }, update);
+          if (mediaType === 'music') await MusicTrackModel.updateOne({ _id: mediaId }, update);
+        } catch (error: unknown) {
+          const failure = { $set: { audioProcessingStatus: 'failed', audioProcessingError: error instanceof Error ? error.message : 'Audio processing failed' } };
+          if (mediaType === 'sound') await OriginalSoundModel.updateOne({ _id: mediaId }, failure);
+          if (mediaType === 'music') await MusicTrackModel.updateOne({ _id: mediaId }, failure);
+          throw error;
+        }
+        return;
+      }
+
+      let sourceKey: string | null = null;
+      let authorId: string | null = null;
+
+      if (mediaType === 'post') {
+        const post = await PostModel.findById(mediaId).select('media author mediaKind');
+        if (!post || post.mediaKind !== 'short_video') return;
+        sourceKey = post.media.key;
+        authorId = post.author.toString();
+      } else if (mediaType === 'blog') {
+        const blog = await BlogModel.findById(mediaId).select('videoKey author');
+        if (!blog || !blog.videoKey) return;
+        sourceKey = blog.videoKey;
+        authorId = blog.author.toString();
+      } else {
+        const story = await StoryModel.findById(mediaId).select('media author mediaKind');
+        if (!story || story.mediaKind !== 'short_video') return;
+        sourceKey = story.media.key;
+        authorId = story.author.toString();
+      }
+
+      if (sourceKey === null || authorId === null) return;
+
+      try {
+        const manifest = await transcodeVideoToHls({
+          userId: authorId,
+          sourceKey,
+        });
+
+        const update = {
+          $set: {
+            mediaProcessingStatus: 'ready',
+            hlsUrl: manifest.masterUrl,
+            hlsVariants: manifest.variants,
+            mediaProcessingError: null,
+          },
+        };
+        if (mediaType === 'post') await PostModel.updateOne({ _id: mediaId }, update);
+        if (mediaType === 'blog') await BlogModel.updateOne({ _id: mediaId }, update);
+        if (mediaType === 'story') await StoryModel.updateOne({ _id: mediaId }, update);
+      } catch (error: unknown) {
+        const failure = {
+          $set: {
+            mediaProcessingStatus: 'failed',
+            mediaProcessingError: error instanceof Error ? error.message : 'HLS processing failed',
+          },
+        };
+        if (mediaType === 'post') await PostModel.updateOne({ _id: mediaId }, failure);
+        if (mediaType === 'blog') await BlogModel.updateOne({ _id: mediaId }, failure);
+        if (mediaType === 'story') await StoryModel.updateOne({ _id: mediaId }, failure);
+        throw error;
+      }
+    },
+    { connection: redisConnectionOptions, concurrency: 1 },
+  );
+
   worker.on('failed', (job, err) => {
     // eslint-disable-next-line no-console
     console.error(
-      `[sound-extraction] failed postId=${job?.data.postId ?? '?'} attempts=${
-        job?.attemptsMade ?? '?'
-      }:`,
+      `[sound-extraction] failed postId=${job?.data.postId ?? '?'} attempts=${String(
+        job?.attemptsMade ?? '?',
+      )}:`,
       err.message,
     );
   });
@@ -51,13 +145,19 @@ async function main(): Promise<void> {
     console.error('[sound-extraction] worker error:', err.message);
   });
 
+  mediaWorker.on('error', err => {
+    // eslint-disable-next-line no-console
+    console.error('[media-processing] worker error:', err.message);
+  });
+
   // eslint-disable-next-line no-console
-  console.log('Sound-extraction worker listening on queue:', SOUND_EXTRACTION_QUEUE);
+  console.log('Workers listening on queues:', SOUND_EXTRACTION_QUEUE, MEDIA_PROCESSING_QUEUE);
 
   const shutdown = async (signal: string): Promise<void> => {
     // eslint-disable-next-line no-console
     console.log(`Received ${signal}, draining worker…`);
     await worker.close();
+    await mediaWorker.close();
     await disconnectDb();
     process.exit(0);
   };

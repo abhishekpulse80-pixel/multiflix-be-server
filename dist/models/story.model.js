@@ -13,6 +13,10 @@ const storyMediaSchema = new Schema({
     size: { type: Number, required: true, min: 0 },
     originalName: { type: String, required: true },
     url: { type: String, default: null },
+    imageVariants: {
+        type: [{ _id: false, quality: { type: String, required: true }, width: { type: Number, required: true }, url: { type: String, required: true } }],
+        default: [],
+    },
 }, { _id: false });
 const storySchema = new Schema({
     author: {
@@ -39,6 +43,27 @@ const storySchema = new Schema({
     mediaWidth: { type: Number, default: null, min: 1 },
     mediaHeight: { type: Number, default: null, min: 1 },
     durationSeconds: { type: Number, default: null, min: 0 },
+    mediaProcessingStatus: {
+        type: String,
+        enum: ['not_required', 'processing', 'ready', 'failed'],
+        default: 'not_required',
+        index: true,
+    },
+    hlsUrl: { type: String, default: null },
+    hlsVariants: {
+        type: [
+            {
+                _id: false,
+                quality: { type: String, required: true },
+                width: { type: Number, required: true },
+                height: { type: Number, required: true },
+                bitrateKbps: { type: Number, required: true },
+                playlistUrl: { type: String, required: true },
+            },
+        ],
+        default: [],
+    },
+    mediaProcessingError: { type: String, default: null },
     viewsCount: { type: Number, default: 0, min: 0 },
     expiresAt: { type: Date, required: true },
     isActive: { type: Boolean, default: true },

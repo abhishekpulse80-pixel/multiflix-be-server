@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
 import { Router, type Request } from 'express';
 import { env, isProd } from '../config/env.js';
 import { asyncRoute } from '../lib/asyncRoute.js';
@@ -24,6 +25,7 @@ import { createReportBodySchema } from '../schemas/reports.schemas.js';
 import * as commentService from '../services/comment.service.js';
 import * as postService from '../services/post.service.js';
 import * as reportService from '../services/report.service.js';
+import { PostModel } from '../models/post.model.js';
 
 const rateLimitShared =
   !isProd && env.trustProxyHops === 0
@@ -215,6 +217,36 @@ postsRouter.post(
     const { liked } = req.body as { liked: boolean };
     const result = await postService.setPostLike(req.auth.userId, postId, liked);
     sendData(res, result);
+  }),
+);
+
+/**
+ * HLS processing status for a video post.
+ * `GET /api/v1/posts/:postId/media-status`
+ */
+postsRouter.get(
+  '/:postId/media-status',
+  readLimiter,
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const postId = postIdParam(req);
+    if (!mongoose.isValidObjectId(postId)) {
+      throw new HttpError(400, 'Invalid post id', 'INVALID_POST_ID');
+    }
+    const post = await PostModel.findById(postId)
+      .select('author mediaKind mediaProcessingStatus hlsUrl hlsVariants mediaProcessingError')
+      .lean();
+    if (!post) {
+      throw new HttpError(404, 'Post not found', 'POST_NOT_FOUND');
+    }
+    sendData(res, {
+      postId,
+      mediaKind: post.mediaKind,
+      status: post.mediaProcessingStatus ?? 'not_required',
+      hlsUrl: post.hlsUrl ?? null,
+      variants: post.hlsVariants ?? [],
+      error: post.mediaProcessingError ?? null,
+    });
   }),
 );
 

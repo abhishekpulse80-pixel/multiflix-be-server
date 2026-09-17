@@ -10,6 +10,7 @@ import { ArtistModel } from '../models/artist.model.js';
 import { UserModel } from '../models/user.model.js';
 import { createNotification, sendToUser } from './notification.service.js';
 import { isBlockedBetween, listHiddenUserIds } from './userBlock.service.js';
+import { enqueueMediaProcessing } from '../queues/mediaProcessing.queue.js';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const STORY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 function authorIdStr(author) {
@@ -165,6 +166,7 @@ function toStoryDto(doc, authorUsername, musicByTrackId, authorName) {
             size: doc.media.size,
             originalName: doc.media.originalName,
             url: doc.media.url,
+            imageVariants: doc.media.imageVariants ?? [],
         },
         soundTitle: doc.soundTitle,
         music: buildStoryMusicDto(doc, musicByTrackId),
@@ -172,6 +174,10 @@ function toStoryDto(doc, authorUsername, musicByTrackId, authorName) {
         mediaWidth: doc.mediaWidth,
         mediaHeight: doc.mediaHeight,
         durationSeconds: doc.durationSeconds,
+        mediaProcessingStatus: doc.mediaProcessingStatus ?? 'not_required',
+        hlsUrl: doc.hlsUrl ?? null,
+        hlsVariants: doc.hlsVariants ?? [],
+        mediaProcessingError: doc.mediaProcessingError ?? null,
         viewsCount: doc.viewsCount,
         expiresAt: doc.expiresAt.toISOString(),
         createdAt: createdAt.toISOString(),
@@ -260,6 +266,7 @@ export async function createStory(userId, body) {
             size: body.file.size,
             originalName: body.file.originalName,
             url: body.file.url,
+            imageVariants: body.file.imageVariants ?? [],
         },
         soundTitle: resolvedSoundTitle,
         musicTrack: musicTrackOid,
@@ -268,6 +275,10 @@ export async function createStory(userId, body) {
         mediaWidth: body.mediaWidth ?? null,
         mediaHeight: body.mediaHeight ?? null,
         durationSeconds: body.durationSeconds ?? null,
+        mediaProcessingStatus: body.mediaKind === 'short_video' ? 'processing' : 'not_required',
+        hlsUrl: null,
+        hlsVariants: [],
+        mediaProcessingError: null,
         expiresAt,
         showInTrending: body.showInTrending ?? true,
         textOverlays: (body.textOverlays ?? []).map((o) => ({
@@ -279,6 +290,17 @@ export async function createStory(userId, body) {
         })),
         mediaTransform: body.mediaTransform ?? null,
     });
+    if (body.mediaKind === 'short_video') {
+        enqueueMediaProcessing('story', doc._id.toString()).catch((err) => {
+            void StoryModel.updateOne({ _id: doc._id }, {
+                $set: {
+                    mediaProcessingStatus: 'failed',
+                    mediaProcessingError: 'Media processing queue unavailable',
+                },
+            });
+            console.error(`[stories] enqueueMediaProcessing failed storyId=${doc._id.toString()}:`, err instanceof Error ? err.message : err);
+        });
+    }
     const info = await authorInfoFor(userId);
     const musicMap = doc.musicTrack
         ? await buildMusicMap([doc.musicTrack])

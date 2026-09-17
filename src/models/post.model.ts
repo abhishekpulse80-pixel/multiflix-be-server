@@ -2,6 +2,21 @@ import mongoose, { Schema, type Model } from 'mongoose';
 
 /** One feed item: single image or short video (matches upload `category` image | video). */
 export type PostMediaKind = 'image' | 'short_video';
+export type MediaProcessingStatus = 'not_required' | 'processing' | 'ready' | 'failed';
+
+export interface IPostHlsVariant {
+  quality: string;
+  width: number;
+  height: number;
+  bitrateKbps: number;
+  playlistUrl: string;
+}
+
+export interface IPostImageVariant {
+  quality: '360w' | '720w' | '1080w';
+  width: number;
+  url: string;
+}
 
 /** Same shape as `uploadOneBuffer` → `UploadedFileMeta` (single asset per post). */
 export interface IPostMedia {
@@ -11,6 +26,7 @@ export interface IPostMedia {
   size: number;
   originalName: string;
   url: string | null;
+  imageVariants?: IPostImageVariant[];
 }
 
 export interface IPost {
@@ -51,6 +67,10 @@ export interface IPost {
   mediaWidth: number | null;
   mediaHeight: number | null;
   durationSeconds: number | null;
+  mediaProcessingStatus?: MediaProcessingStatus;
+  hlsUrl?: string | null;
+  hlsVariants?: IPostHlsVariant[];
+  mediaProcessingError?: string | null;
   likesCount: number;
   savesCount: number;
   commentsCount: number;
@@ -66,6 +86,10 @@ const mediaSchema = new Schema<IPostMedia>(
     size: { type: Number, required: true, min: 0 },
     originalName: { type: String, required: true },
     url: { type: String, default: null },
+    imageVariants: {
+      type: [{ _id: false, quality: { type: String, required: true }, width: { type: Number, required: true }, url: { type: String, required: true } }],
+      default: [],
+    },
   },
   { _id: false },
 );
@@ -111,6 +135,27 @@ const postSchema = new Schema<IPost>(
     mediaWidth: { type: Number, default: null, min: 1 },
     mediaHeight: { type: Number, default: null, min: 1 },
     durationSeconds: { type: Number, default: null, min: 0 },
+    mediaProcessingStatus: {
+      type: String,
+      enum: ['not_required', 'processing', 'ready', 'failed'],
+      default: 'not_required',
+      index: true,
+    },
+    hlsUrl: { type: String, default: null },
+    hlsVariants: {
+      type: [
+        {
+          _id: false,
+          quality: { type: String, required: true },
+          width: { type: Number, required: true },
+          height: { type: Number, required: true },
+          bitrateKbps: { type: Number, required: true },
+          playlistUrl: { type: String, required: true },
+        },
+      ],
+      default: [],
+    },
+    mediaProcessingError: { type: String, default: null },
     likesCount: { type: Number, default: 0, min: 0 },
     savesCount: { type: Number, default: 0, min: 0 },
     commentsCount: { type: Number, default: 0, min: 0 },
