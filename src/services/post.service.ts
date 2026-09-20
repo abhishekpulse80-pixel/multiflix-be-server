@@ -193,10 +193,10 @@ async function infoForAuthorId(authorId: string): Promise<AuthorInfo> {
   const row = (await UserModel.findById(authorId)
     .select('username fullName avatarUrl')
     .lean()) as {
-    username?: string | null;
-    fullName?: string | null;
-    avatarUrl?: string | null;
-  } | null;
+      username?: string | null;
+      fullName?: string | null;
+      avatarUrl?: string | null;
+    } | null;
   const u =
     typeof row?.username === 'string' && row.username.trim().length > 0
       ? row.username.trim().toLowerCase()
@@ -250,8 +250,8 @@ async function buildMusicMap(
   const artists =
     artistIds.length > 0
       ? ((await ArtistModel.find({ _id: { $in: artistIds } })
-          .select('name')
-          .lean()) as ArtistLean[])
+        .select('name')
+        .lean()) as ArtistLean[])
       : [];
   const artistName = new Map(artists.map((a) => [a._id.toString(), a.name]));
   return new Map(
@@ -551,13 +551,50 @@ function toPostDto(
   };
 }
 
+export async function getPostById(
+  postId: string,
+  viewerUserId: string,
+): Promise<PostDto> {
+  if (!mongoose.isValidObjectId(postId)) {
+    throw new HttpError(400, 'Invalid post id', 'INVALID_POST_ID');
+  }
+
+  const doc = (await PostModel.findById(postId).lean()) as
+    | (IPost & { _id: Types.ObjectId })
+    | null;
+  if (!doc) {
+    throw new HttpError(404, 'Post not found', 'POST_NOT_FOUND');
+  }
+
+  const authorId = authorIdString(doc.author as PostAuthorRef);
+  const [authorInfo, musicMap, soundMap, ownSoundMap, like, save] =
+    await Promise.all([
+      infoForAuthorId(authorId),
+      buildMusicMap(collectMusicTrackIds([doc])),
+      buildOriginalSoundMap(collectAttachedOriginalSoundIds([doc])),
+      buildOwnSoundMap(collectOwnOriginalSoundIds([doc])),
+      PostLikeModel.exists({ user: viewerUserId, post: postId }),
+      PostSaveModel.exists({ user: viewerUserId, post: postId }),
+    ]);
+
+  return toPostDto(
+    doc,
+    Boolean(like),
+    Boolean(save),
+    authorInfo,
+    musicMap,
+    soundMap,
+    ownSoundMap,
+  );
+}
+
 export type HomeFeedItemDto =
   | { type: 'post'; post: PostDto }
   | {
-      type: 'recommendations';
-      id: string;
-      users: FeedRecommendationUserDto[];
-    }
+    type: 'recommendations';
+    id: string;
+    users: FeedRecommendationUserDto[];
+  }
   | { type: 'sponsored'; ad: SponsoredAdDto };
 
 export type HomeFeedResponse = {
@@ -690,9 +727,9 @@ export async function listHomeFeed(
 
   const [followees, followers] = isValidViewer
     ? await Promise.all([
-        listFolloweeIds(viewerUserId),
-        listFollowerIds(viewerUserId),
-      ])
+      listFolloweeIds(viewerUserId),
+      listFollowerIds(viewerUserId),
+    ])
     : [[] as string[], [] as string[]];
   const connectionIds = [...new Set([...followees, ...followers])].filter(
     (id) => !excludeSet.has(id) && mongoose.isValidObjectId(id),
@@ -710,10 +747,10 @@ export async function listHomeFeed(
   type ViewLean = { post: Types.ObjectId };
   const seenOids: Types.ObjectId[] = isValidViewer
     ? (
-        (await PostViewModel.find({ user: viewerUserId })
-          .select('post')
-          .lean()) as ViewLean[]
-      ).map((r) => r.post)
+      (await PostViewModel.find({ user: viewerUserId })
+        .select('post')
+        .lean()) as ViewLean[]
+    ).map((r) => r.post)
     : [];
 
   // Three buckets, concatenated in order; each newest-first:
@@ -866,10 +903,10 @@ export async function listTrendingPosts(
   const trendingFilter =
     hiddenIds.length > 0
       ? {
-          author: {
-            $nin: hiddenIds.map((id) => new mongoose.Types.ObjectId(id)),
-          },
-        }
+        author: {
+          $nin: hiddenIds.map((id) => new mongoose.Types.ObjectId(id)),
+        },
+      }
       : {};
   const docs = (await PostModel.aggregate([
     { $match: trendingFilter },
@@ -1548,12 +1585,12 @@ export async function createPost(
       .select('title status durationSeconds artist')
       .lean()) as
       | {
-          _id: Types.ObjectId;
-          title: string;
-          status: 'draft' | 'published';
-          durationSeconds: number | null;
-          artist: Types.ObjectId;
-        }
+        _id: Types.ObjectId;
+        title: string;
+        status: 'draft' | 'published';
+        durationSeconds: number | null;
+        artist: Types.ObjectId;
+      }
       | null;
     if (!track || track.status !== 'published') {
       throw new HttpError(
@@ -1645,7 +1682,7 @@ export async function createPost(
           );
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // When the uploader kept the original audio, extract it as a reusable
     // Original Sound. Fire-and-forget — a Redis outage must never block
