@@ -30,8 +30,8 @@ import { PostModel } from '../models/post.model.js';
 const rateLimitShared =
   !isProd && env.trustProxyHops === 0
     ? {
-        validate: { xForwardedForHeader: false as const },
-      }
+      validate: { xForwardedForHeader: false as const },
+    }
     : {};
 
 const strictLimiter = rateLimit({
@@ -178,6 +178,11 @@ postsRouter.get(
  * Literal segment — declared before `/:postId/*` so it is never shadowed.
  * `GET /api/v1/posts/saved?page=&limit=`
  */
+/**
+ * Paginated list of the posts the authenticated viewer has saved (bookmarked).
+ * Literal segment — declared before `/:postId/*` so it is never shadowed.
+ * `GET /api/v1/posts/saved?page=&limit=`
+ */
 postsRouter.get(
   '/saved',
   readLimiter,
@@ -193,6 +198,24 @@ postsRouter.get(
         'Invalid query parameters',
         'VALIDATION_ERROR',
         parsed.error.flatten(),
+      );
+
+      /**
+       * Fetch one exact post for shared video links.
+       * `GET /api/v1/posts/:postId`
+       */
+      postsRouter.get(
+        '/:postId',
+        readLimiter,
+        requireAuth,
+        asyncRoute(async (req, res) => {
+          if (!req.auth) {
+            throw new HttpError(401, 'Unauthorized', 'UNAUTHORIZED');
+          }
+          const postId = postIdParam(req);
+          const post = await postService.getPostById(postId, req.auth.userId);
+          sendData(res, { post });
+        }),
       );
     }
     const data = await postService.listSavedPosts(req.auth.userId, parsed.data);
