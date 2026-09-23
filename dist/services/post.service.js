@@ -320,6 +320,32 @@ function toPostDto(doc, likedByViewer, savedByViewer, authorInfo, musicByTrackId
         updatedAt: updatedAt.toISOString(),
     };
 }
+export async function getPostById(postId, viewerUserId) {
+    if (!mongoose.isValidObjectId(postId)) {
+        throw new HttpError(400, 'Invalid post id', 'INVALID_POST_ID');
+    }
+    const doc = (await PostModel.findById(postId).lean());
+    if (!doc) {
+        throw new HttpError(404, 'Post not found', 'POST_NOT_FOUND');
+    }
+    const authorId = authorIdString(doc.author);
+    const validViewerUserId = typeof viewerUserId === 'string' && mongoose.isValidObjectId(viewerUserId)
+        ? viewerUserId
+        : null;
+    const [authorInfo, musicMap, soundMap, ownSoundMap, like, save] = await Promise.all([
+        infoForAuthorId(authorId),
+        buildMusicMap(collectMusicTrackIds([doc])),
+        buildOriginalSoundMap(collectAttachedOriginalSoundIds([doc])),
+        buildOwnSoundMap(collectOwnOriginalSoundIds([doc])),
+        validViewerUserId
+            ? PostLikeModel.exists({ user: validViewerUserId, post: postId })
+            : Promise.resolve(null),
+        validViewerUserId
+            ? PostSaveModel.exists({ user: validViewerUserId, post: postId })
+            : Promise.resolve(null),
+    ]);
+    return toPostDto(doc, Boolean(like), Boolean(save), authorInfo, musicMap, soundMap, ownSoundMap);
+}
 async function mergeRecommendationsIntoFirstPage(viewerUserId, posts) {
     const following = await countFollowing(viewerUserId);
     const showRec = following < 5;

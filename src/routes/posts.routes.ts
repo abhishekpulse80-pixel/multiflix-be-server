@@ -200,26 +200,25 @@ postsRouter.get(
         parsed.error.flatten(),
       );
 
-      /**
-       * Fetch one exact post for shared video links.
-       * `GET /api/v1/posts/:postId`
-       */
-      postsRouter.get(
-        '/:postId',
-        readLimiter,
-        requireAuth,
-        asyncRoute(async (req, res) => {
-          if (!req.auth) {
-            throw new HttpError(401, 'Unauthorized', 'UNAUTHORIZED');
-          }
-          const postId = postIdParam(req);
-          const post = await postService.getPostById(postId, req.auth.userId);
-          sendData(res, { post });
-        }),
-      );
     }
     const data = await postService.listSavedPosts(req.auth.userId, parsed.data);
     sendData(res, data);
+  }),
+);
+
+
+/**
+ * Fetch one exact post for shared video links.
+ * `GET /api/v1/posts/:postId`
+ */
+postsRouter.get(
+  '/:postId',
+  readLimiter,
+  asyncRoute(async (req, res) => {
+    const postId = postIdParam(req);
+    const viewerUserId = req.auth?.userId ?? null;
+    const post = await postService.getPostById(postId, viewerUserId);
+    sendData(res, { post });
   }),
 );
 
