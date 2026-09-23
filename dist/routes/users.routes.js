@@ -174,6 +174,17 @@ usersRouter.get('/by-username/:username', readLimiter, requireAuth, asyncRoute(a
     sendData(res, result);
 }));
 /**
+ * Public profile metadata for website/social previews.
+ * `GET /api/v1/users/public/by-username/:username`
+ */
+usersRouter.get('/public/by-username/:username', readLimiter, asyncRoute(async (req, res) => {
+    const raw = req.params.username;
+    const username = Array.isArray(raw) ? raw[0] : raw;
+    const { userId } = await getUserIdByUsername(String(username ?? ''));
+    const profile = await getUserPublicProfile(userId, null);
+    sendData(res, { profile });
+}));
+/**
  * Authenticated viewer fetches another user's public profile (no email / phone / address).
  * `GET /api/v1/users/:userId/public`
  */

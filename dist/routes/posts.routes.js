@@ -112,6 +112,11 @@ postsRouter.get('/music/:trackId', readLimiter, requireAuth, asyncRoute(async (r
  * Literal segment — declared before `/:postId/*` so it is never shadowed.
  * `GET /api/v1/posts/saved?page=&limit=`
  */
+/**
+ * Paginated list of the posts the authenticated viewer has saved (bookmarked).
+ * Literal segment — declared before `/:postId/*` so it is never shadowed.
+ * `GET /api/v1/posts/saved?page=&limit=`
+ */
 postsRouter.get('/saved', readLimiter, requireAuth, asyncRoute(async (req, res) => {
     if (!req.auth) {
         throw new HttpError(401, 'Unauthorized', 'UNAUTHORIZED');
@@ -122,6 +127,16 @@ postsRouter.get('/saved', readLimiter, requireAuth, asyncRoute(async (req, res) 
     }
     const data = await postService.listSavedPosts(req.auth.userId, parsed.data);
     sendData(res, data);
+}));
+/**
+ * Fetch one exact post for shared video links.
+ * `GET /api/v1/posts/:postId`
+ */
+postsRouter.get('/:postId', readLimiter, asyncRoute(async (req, res) => {
+    const postId = postIdParam(req);
+    const viewerUserId = req.auth?.userId ?? null;
+    const post = await postService.getPostById(postId, viewerUserId);
+    sendData(res, { post });
 }));
 /**
  * Like (`{ "liked": true }`) or remove like (`{ "liked": false }`). Single endpoint, idempotent.

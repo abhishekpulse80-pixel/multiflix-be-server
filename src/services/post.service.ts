@@ -553,7 +553,7 @@ function toPostDto(
 
 export async function getPostById(
   postId: string,
-  viewerUserId: string,
+  viewerUserId: string | null | undefined,
 ): Promise<PostDto> {
   if (!mongoose.isValidObjectId(postId)) {
     throw new HttpError(400, 'Invalid post id', 'INVALID_POST_ID');
@@ -567,14 +567,23 @@ export async function getPostById(
   }
 
   const authorId = authorIdString(doc.author as PostAuthorRef);
+  const validViewerUserId =
+    typeof viewerUserId === 'string' && mongoose.isValidObjectId(viewerUserId)
+      ? viewerUserId
+      : null;
+
   const [authorInfo, musicMap, soundMap, ownSoundMap, like, save] =
     await Promise.all([
       infoForAuthorId(authorId),
       buildMusicMap(collectMusicTrackIds([doc])),
       buildOriginalSoundMap(collectAttachedOriginalSoundIds([doc])),
       buildOwnSoundMap(collectOwnOriginalSoundIds([doc])),
-      PostLikeModel.exists({ user: viewerUserId, post: postId }),
-      PostSaveModel.exists({ user: viewerUserId, post: postId }),
+      validViewerUserId
+        ? PostLikeModel.exists({ user: validViewerUserId, post: postId })
+        : Promise.resolve(null),
+      validViewerUserId
+        ? PostSaveModel.exists({ user: validViewerUserId, post: postId })
+        : Promise.resolve(null),
     ]);
 
   return toPostDto(
