@@ -151,7 +151,12 @@ async function dispatchChatMessagePush(conversationId, senderId, message) {
                     : message.text;
         }
         else if (message.media) {
-            body = message.media.kind === 'video' ? '🎥 Video' : '📷 Photo';
+            body =
+                message.media.kind === 'video'
+                    ? '🎥 Video'
+                    : message.media.kind === 'audio'
+                        ? '🎤 Voice note'
+                        : '📷 Photo';
         }
         else if (message.postRef) {
             body = 'Shared a post';

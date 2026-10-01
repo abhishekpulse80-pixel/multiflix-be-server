@@ -33,13 +33,13 @@ const replyToSchema = new Schema({
     text: { type: String, default: '', maxlength: 200 },
     kind: {
         type: String,
-        enum: ['text', 'image', 'video', 'post', 'story'],
+        enum: ['text', 'image', 'video', 'audio', 'post', 'story'],
         default: 'text',
     },
 }, { _id: false });
 const mediaSchema = new Schema({
     url: { type: String, required: true },
-    kind: { type: String, enum: ['image', 'video'], required: true },
+    kind: { type: String, enum: ['image', 'video', 'audio'], required: true },
     thumbnailUrl: { type: String, default: '' },
     width: { type: Number, default: 0 },
     height: { type: Number, default: 0 },

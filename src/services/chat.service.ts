@@ -86,7 +86,7 @@ export type MessageReplyRefDto = {
 
 export type MessageMediaDto = {
   url: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   thumbnailUrl: string;
   width: number;
   height: number;
@@ -96,7 +96,7 @@ export type MessageMediaDto = {
 
 export type MessageMediaInput = {
   url: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   thumbnailUrl?: string;
   width?: number;
   height?: number;
@@ -133,6 +133,8 @@ export type ConversationDto = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const ALLOWED_CHAT_MEDIA_KINDS = new Set<string>(['image', 'video', 'audio']);
 
 function assertOid(id: string, label: string): void {
   if (!mongoose.isValidObjectId(id)) {
@@ -229,7 +231,7 @@ function toMessageDto(
 /** Pick the kind that best represents the original message for the preview. */
 function deriveReplyKind(msg: IMessage): MessageReplyKind {
   if (msg.media) {
-    return msg.media.kind === 'video' ? 'video' : 'image';
+    return msg.media.kind;
   }
   if (msg.postRef) return 'post';
   if (msg.storyRef) return 'story';
@@ -421,7 +423,9 @@ export async function listConversations(
                 : msg.media
                   ? msg.media.kind === 'video'
                     ? 'Video'
-                    : 'Photo'
+                    : msg.media.kind === 'audio'
+                      ? 'Voice note'
+                      : 'Photo'
                   : msg.postRef
                     ? 'Shared a post'
                     : msg.profileRef
@@ -512,7 +516,7 @@ export async function getMessages(
 
 /**
  * Send a text message — or a shared-post message when `postRef` is provided,
- * or a media message (image/video) when `mediaInput` is provided.
+ * or a media message (image/video/audio) when `mediaInput` is provided.
  * Returns the created MessageDto and updates conversation's lastMessage.
  */
 export async function sendMessage(
@@ -591,7 +595,7 @@ export async function sendMessage(
   let mediaDoc: IMessageMedia | null = null;
   if (hasMedia) {
     const kind = mediaInput!.kind;
-    if (kind !== 'image' && kind !== 'video') {
+    if (!ALLOWED_CHAT_MEDIA_KINDS.has(kind)) {
       throw new HttpError(400, 'Invalid media kind', 'INVALID_MEDIA_KIND');
     }
     mediaDoc = {
