@@ -202,7 +202,12 @@ async function dispatchChatMessagePush(
           ? `${message.text.slice(0, 117)}…`
           : message.text;
     } else if (message.media) {
-      body = message.media.kind === 'video' ? '🎥 Video' : '📷 Photo';
+      body =
+        message.media.kind === 'video'
+          ? '🎥 Video'
+          : message.media.kind === 'audio'
+            ? '🎤 Voice note'
+            : '📷 Photo';
     } else if (message.postRef) {
       body = 'Shared a post';
     }

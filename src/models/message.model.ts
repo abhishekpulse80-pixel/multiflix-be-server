@@ -49,7 +49,13 @@ export interface IMessageProfileRef {
  * the chat bubble can still render the small preview if the original is later
  * deleted. Only carries the bits needed for the preview pill (no full media).
  */
-export type MessageReplyKind = 'text' | 'image' | 'video' | 'post' | 'story';
+export type MessageReplyKind =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'post'
+  | 'story';
 
 export interface IMessageReplyRef {
   messageId: Types.ObjectId;
@@ -61,12 +67,12 @@ export interface IMessageReplyRef {
 }
 
 /**
- * Media attachment (image/video) sent directly in a chat message.
+ * Media attachment (image/video/audio) sent directly in a chat message.
  * Uploaded via the existing uploads endpoint; we only store the URL + metadata.
  */
 export interface IMessageMedia {
   url: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   thumbnailUrl?: string;
   width?: number;
   height?: number;
@@ -134,7 +140,7 @@ const replyToSchema = new Schema<IMessageReplyRef>(
     text: { type: String, default: '', maxlength: 200 },
     kind: {
       type: String,
-      enum: ['text', 'image', 'video', 'post', 'story'],
+      enum: ['text', 'image', 'video', 'audio', 'post', 'story'],
       default: 'text',
     },
   },
@@ -144,7 +150,7 @@ const replyToSchema = new Schema<IMessageReplyRef>(
 const mediaSchema = new Schema<IMessageMedia>(
   {
     url: { type: String, required: true },
-    kind: { type: String, enum: ['image', 'video'], required: true },
+    kind: { type: String, enum: ['image', 'video', 'audio'], required: true },
     thumbnailUrl: { type: String, default: '' },
     width: { type: Number, default: 0 },
     height: { type: Number, default: 0 },

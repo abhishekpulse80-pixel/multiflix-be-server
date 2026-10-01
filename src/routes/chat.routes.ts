@@ -113,7 +113,7 @@ chatRouter.patch(
 /**
  * Send a message in a conversation.
  * `POST /api/v1/chat/conversations/:conversationId/messages`
- * body: { text?: string, postRef?: MessagePostRefInput }
+ * body: { text?: string, postRef?: MessagePostRefInput, media?: MessageMediaInput }
  */
 chatRouter.post(
   '/conversations/:conversationId/messages',
@@ -122,18 +122,19 @@ chatRouter.post(
   asyncRoute(async (req, res) => {
     if (!req.auth) throw new HttpError(401, 'Unauthorized', 'UNAUTHORIZED');
     const convId = req.params.conversationId as string;
-    const { text, postRef, storyRef, profileRef, replyToMessageId } =
+    const { text, postRef, storyRef, profileRef, media, replyToMessageId } =
       req.body as {
         text?: string;
         postRef?: chatService.MessagePostRefInput | null;
+        media?: chatService.MessageMediaInput | null;
         storyRef?: chatService.MessageStoryRefInput | null;
         profileRef?: chatService.MessageProfileRefInput | null;
         replyToMessageId?: string | null;
       };
-    if (!text && !postRef && !storyRef && !profileRef) {
+    if (!text && !postRef && !media && !storyRef && !profileRef) {
       throw new HttpError(
         400,
-        'text, postRef, storyRef, or profileRef is required',
+        'text, postRef, media, storyRef, or profileRef is required',
         'VALIDATION_ERROR',
       );
     }
@@ -142,7 +143,7 @@ chatRouter.post(
       req.auth.userId,
       text ?? '',
       postRef ?? null,
-      null,
+      media ?? null,
       storyRef ?? null,
       replyToMessageId ?? null,
       profileRef ?? null,

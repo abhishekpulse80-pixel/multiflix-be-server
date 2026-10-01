@@ -6,6 +6,7 @@ import { MessageModel, } from '../models/message.model.js';
 import { UserModel } from '../models/user.model.js';
 import { isBlockedBetween, listHiddenUserIds, } from './userBlock.service.js';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+const ALLOWED_CHAT_MEDIA_KINDS = new Set(['image', 'video', 'audio']);
 function assertOid(id, label) {
     if (!mongoose.isValidObjectId(id)) {
         throw new HttpError(400, `Invalid ${label}`, 'INVALID_ID');
@@ -87,7 +88,7 @@ function toMessageDto(doc) {
 /** Pick the kind that best represents the original message for the preview. */
 function deriveReplyKind(msg) {
     if (msg.media) {
-        return msg.media.kind === 'video' ? 'video' : 'image';
+        return msg.media.kind;
     }
     if (msg.postRef)
         return 'post';
@@ -238,7 +239,9 @@ export async function listConversations(userId, opts) {
                         : msg.media
                             ? msg.media.kind === 'video'
                                 ? 'Video'
-                                : 'Photo'
+                                : msg.media.kind === 'audio'
+                                    ? 'Voice note'
+                                    : 'Photo'
                             : msg.postRef
                                 ? 'Shared a post'
                                 : msg.profileRef
@@ -306,7 +309,7 @@ export async function getMessages(conversationId, userId, page = 0, limit = 30) 
 }
 /**
  * Send a text message — or a shared-post message when `postRef` is provided,
- * or a media message (image/video) when `mediaInput` is provided.
+ * or a media message (image/video/audio) when `mediaInput` is provided.
  * Returns the created MessageDto and updates conversation's lastMessage.
  */
 export async function sendMessage(conversationId, senderId, text, postRefInput, mediaInput, storyRefInput, replyToMessageId, profileRefInput) {
@@ -368,7 +371,7 @@ export async function sendMessage(conversationId, senderId, text, postRefInput, 
     let mediaDoc = null;
     if (hasMedia) {
         const kind = mediaInput.kind;
-        if (kind !== 'image' && kind !== 'video') {
+        if (!ALLOWED_CHAT_MEDIA_KINDS.has(kind)) {
             throw new HttpError(400, 'Invalid media kind', 'INVALID_MEDIA_KIND');
         }
         mediaDoc = {
